@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { User, Phone, Mail, Calendar, MapPin, Heart, AlertCircle, FileText } from 'lucide-react';
 import { ProfileEditModal } from './modals/ProfileEditModal';
 

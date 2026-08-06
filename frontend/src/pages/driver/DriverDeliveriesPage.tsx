@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, PackageX, Loader2 } from 'lucide-react';
+import { RefreshCw, PackageX } from 'lucide-react';
 import DeliveriesHeader from '@/components/driver/deliveries/DeliveriesHeader';
 import DeliveriesFilterBar from '@/components/driver/deliveries/DeliveriesFilterBar';
 import DeliveryCard from '@/components/driver/deliveries/DeliveryCard';
@@ -44,7 +44,7 @@ export const DriverDeliveriesPage = () => {
         address: d.customer?.address || "Unknown Address",
         distance: `${d.distance_km || 0} km`,
         eta: `${d.Delivery_Time || 0} mins`,
-        orderValue: `$${d.order_value || 0}.00`,
+        orderValue: `$${(d as any).order_value || 0}.00`,
         status,
         priority,
         riskLevel: d.risk_score || 0,

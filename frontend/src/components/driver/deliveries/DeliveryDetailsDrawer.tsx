@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Navigation, Clock, Package, DollarSign, Lightbulb, AlertTriangle, FileText, User } from 'lucide-react';
+import { X, MapPin, Navigation, Clock, Package, DollarSign, Lightbulb, FileText, User } from 'lucide-react';
 import type { Delivery } from './DeliveryCard';
 import { toast } from 'sonner';
 

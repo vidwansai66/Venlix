@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { GitCommit, Search, RefreshCw, Cpu, BrainCircuit } from 'lucide-react';
+import { BrainCircuit } from 'lucide-react';
 import type { DriverDeliveryItem } from '@/hooks/useDriverData';
 
 interface DecisionTraceProps {

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { HelpCircle, MessageSquare, Headphones, FileQuestion } from 'lucide-react';
 import { SupportModal } from './modals/SupportModal';
 

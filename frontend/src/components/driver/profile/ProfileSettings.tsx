@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Moon, Bell, MapPin, BrainCircuit, Globe, Key, Smartphone, ShieldCheck, ChevronRight, Check } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const ProfileSettings = ({ onChangePasswordModal }: { onChangePasswordModal: () => void }) => {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   
   const [notifications, setNotifications] = useState(() => JSON.parse(localStorage.getItem('venlix-driver-notifications') || 'true'));
   const [location, setLocation] = useState(() => JSON.parse(localStorage.getItem('venlix-driver-location') || 'true'));
@@ -111,7 +113,7 @@ export const ProfileSettings = ({ onChangePasswordModal }: { onChangePasswordMod
              </div>
              <ChevronRight size={18} className="text-muted" />
           </button>
-          <button className="w-full flex justify-between items-center p-3.5 rounded-xl border border-brand-border bg-brand-background hover:border-primary/50 transition-colors">
+          <button className="w-full flex justify-between items-center p-3.5 rounded-xl border border-brand-border bg-brand-background hover:border-primary/50 transition-colors" onClick={() => toast.success('2FA settings feature coming soon')}>
              <div className="flex items-center gap-3">
                <ShieldCheck size={18} className="text-muted" />
                <div className="flex flex-col items-start">
@@ -121,7 +123,7 @@ export const ProfileSettings = ({ onChangePasswordModal }: { onChangePasswordMod
              </div>
              <ChevronRight size={18} className="text-muted" />
           </button>
-          <button className="w-full flex justify-between items-center p-3.5 rounded-xl border border-brand-border bg-brand-background hover:border-primary/50 transition-colors">
+          <button className="w-full flex justify-between items-center p-3.5 rounded-xl border border-brand-border bg-brand-background hover:border-primary/50 transition-colors" onClick={() => toast.success('Device management feature coming soon')}>
              <div className="flex items-center gap-3">
                <Smartphone size={18} className="text-muted" />
                <span className="text-sm font-semibold text-brand-text">Manage Devices</span>

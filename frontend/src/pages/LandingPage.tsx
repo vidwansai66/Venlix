@@ -185,7 +185,7 @@ export const LandingPage = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/signup')}
               rightIcon={<ArrowRight size={14} />}
               className="bg-blue-600 hover:bg-blue-500 text-white border-none rounded-xl"
             >
@@ -217,7 +217,7 @@ export const LandingPage = () => {
             <Button
               variant="primary"
               size="lg"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/signup')}
               className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-500/20 border-none"
             >
               Launch Dashboard
@@ -730,7 +730,7 @@ export const LandingPage = () => {
             <Button
               variant="primary"
               size="lg"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/signup')}
               className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg border-none"
             >
               Launch Dashboard

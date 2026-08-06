@@ -36,7 +36,7 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (_data: FormData) => {
     await new Promise(r => setTimeout(r, 1200));
     toast.success("Support request sent successfully. We'll be in touch soon.");
     onClose();

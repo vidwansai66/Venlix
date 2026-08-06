@@ -1,5 +1,4 @@
-import { motion } from 'framer-motion';
-import { AlertTriangle, CloudRain, Car, AlertCircle } from 'lucide-react';
+import { AlertTriangle, CloudRain, AlertCircle } from 'lucide-react';
 import type { DriverDeliveryItem } from '@/hooks/useDriverData';
 
 interface RiskFactorsProps {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Search, Bell, Menu, User, Settings, LogOut, Sun, Moon, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -124,7 +125,7 @@ export const Navbar = ({ sidebarOpen, setSidebarOpen }: NavbarProps) => {
                     ))}
                   </div>
                   <div className="px-4 py-2 border-t border-brand-border mt-1 text-center">
-                    <button className="text-xs font-semibold text-primary hover:underline">
+                    <button className="text-xs font-semibold text-primary hover:underline" onClick={() => toast.success('All marked as read')}>
                       Mark all as read
                     </button>
                   </div>
@@ -167,17 +168,17 @@ export const Navbar = ({ sidebarOpen, setSidebarOpen }: NavbarProps) => {
                     <p className="text-xs text-muted mt-1.5 font-medium truncate">john.doe@venlix.ai</p>
                   </div>
                   <div className="space-y-0.5">
-                    <button className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-muted hover:bg-brand-background hover:text-brand-text transition-colors">
+                    <button className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-muted hover:bg-brand-background hover:text-brand-text transition-colors" onClick={() => toast.success('Action simulated successfully')}>
                       <User size={16} />
                       Profile Settings
                     </button>
-                    <button className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-muted hover:bg-brand-background hover:text-brand-text transition-colors">
+                    <button className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-muted hover:bg-brand-background hover:text-brand-text transition-colors" onClick={() => toast.success('Action simulated successfully')}>
                       <Settings size={16} />
                       System Admin
                     </button>
                   </div>
                   <div className="border-t border-brand-border mt-1.5 pt-1.5">
-                    <button className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-danger hover:bg-danger/5 transition-colors">
+                    <button className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-danger hover:bg-danger/5 transition-colors" onClick={() => toast.success('Logged out successfully')}>
                       <LogOut size={16} />
                       Log out
                     </button>

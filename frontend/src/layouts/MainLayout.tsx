@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { cn } from '@/utils/cn';
+
 
 export const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -27,7 +28,7 @@ export const MainLayout = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-  const location = useLocation();
+
 
   return (
     <div className="relative min-h-screen bg-brand-background text-brand-text flex flex-col font-sans transition-colors duration-300">

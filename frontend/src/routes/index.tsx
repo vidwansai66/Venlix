@@ -1,9 +1,25 @@
 /* eslint-disable react-refresh/only-export-components, react/only-export-components */
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/layouts/MainLayout';
 import DriverLayout from '@/layouts/driver/DriverLayout';
 import Loading from '@/components/ui/Loading';
+
+// Auth Route Guards
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { session, isLoaded } = useAuth();
+  if (!isLoaded) return <Loading variant="overlay" text="Verifying session..." />;
+  if (!session) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { session, isLoaded } = useAuth();
+  if (!isLoaded) return <Loading variant="overlay" text="Verifying session..." />;
+  if (session) return <Navigate to="/select-role" replace />;
+  return <>{children}</>;
+};
 
 // Lazy loading pages
 const LandingPage = lazy(() => import('@/pages/LandingPage'));
@@ -13,6 +29,12 @@ const DeliveriesPage = lazy(() => import('@/pages/DeliveriesPage'));
 const DigitalTwinPage = lazy(() => import('@/pages/DigitalTwinPage'));
 const HealthPage = lazy(() => import('@/pages/HealthPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+
+// Auth Pages
+const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
+const SignUpPage = lazy(() => import('@/pages/auth/SignUpPage'));
+const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
+const SelectRolePage = lazy(() => import('@/pages/auth/SelectRolePage'));
 
 // Driver Pages
 const DriverDashboardPage = lazy(() => import('@/pages/driver/DriverDashboardPage'));
@@ -34,8 +56,61 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/login',
+    element: (
+      <PublicRoute>
+        <Suspense fallback={<Loading variant="overlay" text="Authenticating..." />}>
+          <LoginPage />
+        </Suspense>
+      </PublicRoute>
+    ),
+  },
+  {
+    path: '/signup',
+    element: (
+      <PublicRoute>
+        <Suspense fallback={<Loading variant="overlay" text="Preparing registration..." />}>
+          <SignUpPage />
+        </Suspense>
+      </PublicRoute>
+    ),
+  },
+  {
+    path: '/forgot-password',
+    element: (
+      <PublicRoute>
+        <Suspense fallback={<Loading variant="overlay" text="Loading..." />}>
+          <ForgotPasswordPage />
+        </Suspense>
+      </PublicRoute>
+    ),
+  },
+  {
+    path: '/select-role',
+    element: (
+      <ProtectedRoute>
+        <Suspense fallback={<Loading variant="overlay" text="Loading modules..." />}>
+          <SelectRolePage />
+        </Suspense>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/admin',
+    element: <Navigate to="/dashboard" replace />
+  },
+  // Customer alias redirect (since Customer dashboard is not fully implemented yet)
+  {
+    path: '/customer',
+    element: <Navigate to="/dashboard" replace /> 
+  },
+  {
     path: '/',
-    element: <MainLayout />,
+    element: (
+      <ProtectedRoute>
+        <MainLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         path: 'dashboard',
@@ -89,7 +164,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/driver',
-    element: <DriverLayout />,
+    element: (
+      <ProtectedRoute>
+        <DriverLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,

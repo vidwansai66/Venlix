@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { PackageOpen, CheckCircle2, Clock, Truck, XCircle } from 'lucide-react';
+import { PackageOpen, CheckCircle2, Clock, Truck } from 'lucide-react';
 import { useDriverData } from '@/hooks/useDriverData';
 
 export const DeliveriesHeader = () => {

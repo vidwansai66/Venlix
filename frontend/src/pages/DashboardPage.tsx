@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from 'react';
+import { toast } from 'sonner';
 import {
   Activity,
   CheckCircle2,
@@ -75,7 +76,9 @@ export const DashboardPage = () => {
           >
             Sync Data
           </Button>
-          <Button variant="primary" size="sm" leftIcon={<Brain size={14} />}>
+          <Button variant="primary" size="sm" leftIcon={<Brain size={14} />} onClick={() => {
+            toast.info('Model Settings feature coming soon');
+          }}>
             Model Settings
           </Button>
         </div>

@@ -1,4 +1,3 @@
-import { toast } from 'sonner';
 import { BrainCircuit, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { DriverDeliveryItem } from '@/hooks/useDriverData';

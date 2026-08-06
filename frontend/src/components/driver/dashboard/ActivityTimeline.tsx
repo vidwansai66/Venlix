@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, AlertTriangle, Truck } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import type { DriverDeliveryItem } from '@/hooks/useDriverData';
 
 interface ActivityTimelineProps {
@@ -40,7 +40,7 @@ export const ActivityTimeline = ({ deliveries }: ActivityTimelineProps) => {
         <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-brand-border rounded-full"></div>
         
         <div className="space-y-6 relative">
-          {recentDeliveries.map((delivery, index) => (
+          {recentDeliveries.map((delivery) => (
             <div key={delivery.id} className="flex gap-4">
               <div className={`w-8 h-8 rounded-full border bg-brand-card flex items-center justify-center shrink-0 z-10 ${getStatusColor(delivery.prediction)}`}>
                 {getStatusIcon(delivery.prediction)}

@@ -1,5 +1,5 @@
 import { useDriverData } from '@/hooks/useDriverData';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import PerformanceHeader from '@/components/driver/performance/PerformanceHeader';
 import PerformanceCharts from '@/components/driver/performance/PerformanceCharts';
 import RatingCard from '@/components/driver/performance/RatingCard';

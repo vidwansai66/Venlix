@@ -40,7 +40,7 @@ export const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProp
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (_data: FormData) => {
     await new Promise(r => setTimeout(r, 1000)); // Simulate API call
     toast.success("Password successfully updated");
     onClose();

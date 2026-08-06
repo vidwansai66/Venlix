@@ -1,6 +1,5 @@
 import { useDriverData } from '@/hooks/useDriverData';
-import type { DriverDeliveryItem } from '@/hooks/useDriverData';
-import { Loader2, RefreshCw, BrainCircuit, ShieldAlert } from 'lucide-react';
+import { RefreshCw, BrainCircuit } from 'lucide-react';
 import AssistantHeader from '@/components/driver/assistant/AssistantHeader';
 import AssistantSummary from '@/components/driver/assistant/AssistantSummary';
 import AiRecommendationCard from '@/components/driver/assistant/AiRecommendationCard';

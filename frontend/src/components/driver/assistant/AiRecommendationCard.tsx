@@ -1,5 +1,4 @@
-import { motion } from 'framer-motion';
-import { Lightbulb, AlertTriangle, Clock, Target, Navigation } from 'lucide-react';
+import { Lightbulb, Clock, Target, Navigation } from 'lucide-react';
 import type { DriverDeliveryItem } from '@/hooks/useDriverData';
 
 interface AiRecommendationCardProps {
