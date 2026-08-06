@@ -1,10 +1,17 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
+import { useUser as useClerkUser, useSession as useClerkSession, useClerk } from '@clerk/clerk-react';
 import { supabase } from '@/lib/supabase';
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  name?: string;
+  profile_image?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: UserProfile | null;
+  session: any; // Clerk session
   isLoaded: boolean;
   signOut: () => Promise<void>;
 }
@@ -17,33 +24,51 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const { user: clerkUser, isLoaded: clerkLoaded } = useClerkUser();
+  const { session: clerkSession } = useClerkSession();
+  const { signOut: clerkSignOut } = useClerk();
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user || null);
-      setIsLoaded(true);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user || null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    if (clerkLoaded) {
+      if (clerkUser) {
+        // Fetch profile from supabase
+        supabase
+          .from('users')
+          .select('*')
+          .eq('id', clerkUser.id)
+          .single()
+          .then(({ data, error }) => {
+            if (!error && data) {
+              setProfile(data as UserProfile);
+            } else {
+              setProfile(null);
+            }
+            setProfileLoaded(true);
+          });
+      } else {
+        setProfile(null);
+        setProfileLoaded(true);
+      }
+    }
+  }, [clerkUser, clerkLoaded]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await clerkSignOut();
+    setProfile(null);
   };
 
+  const isFullyLoaded = clerkLoaded && profileLoaded;
+
   return (
-    <AuthContext.Provider value={{ user, session, isLoaded, signOut }}>
+    <AuthContext.Provider value={{ 
+      user: profile, 
+      session: clerkSession, 
+      isLoaded: isFullyLoaded, 
+      signOut
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -51,7 +76,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => useContext(AuthContext);
 
-// Backwards compatibility hook for some components that used useUser() from Clerk
 export const useUser = () => {
   const { user, isLoaded } = useAuth();
   return { user, isLoaded };

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Hexagon } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { useSignIn } from '@clerk/clerk-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const LoginPage = () => {
-  const navigate = useNavigate();
-  const { isLoaded } = useAuth();
+  const { isLoaded: isAuthLoaded } = useAuth();
+  const { isLoaded, signIn, setActive } = useSignIn();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,7 +31,7 @@ export const LoginPage = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid || !isLoaded) return;
+    if (!isFormValid || !isLoaded || !isAuthLoaded) return;
     
     setError('');
     setIsLoading(true);
@@ -43,20 +43,21 @@ export const LoginPage = () => {
     }
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
+      if (!signIn) throw new Error("Authentication not loaded");
+      
+      const result = await signIn.create({
+        identifier: email,
         password,
       });
 
-      if (signInError) throw signInError;
-
-      if (data.user) {
-        navigate('/select-role');
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        // Redirection is handled automatically by PublicRoute
       } else {
         setError('Requires additional authentication steps.');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password. Please try again.');
+      setError(err.errors?.[0]?.message || err.message || 'Invalid email or password. Please try again.');
     } finally {
       setIsLoading(false);
     }

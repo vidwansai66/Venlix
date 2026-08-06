@@ -3,7 +3,6 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/layouts/MainLayout';
-import DriverLayout from '@/layouts/driver/DriverLayout';
 import Loading from '@/components/ui/Loading';
 
 // Auth Route Guards
@@ -17,7 +16,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoaded } = useAuth();
   if (!isLoaded) return <Loading variant="overlay" text="Verifying session..." />;
-  if (session) return <Navigate to="/select-role" replace />;
+  if (session) {
+    return <Navigate to="/dashboard" replace />;
+  }
   return <>{children}</>;
 };
 
@@ -34,14 +35,6 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const SignUpPage = lazy(() => import('@/pages/auth/SignUpPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
-const SelectRolePage = lazy(() => import('@/pages/auth/SelectRolePage'));
-
-// Driver Pages
-const DriverDashboardPage = lazy(() => import('@/pages/driver/DriverDashboardPage'));
-const DriverDeliveriesPage = lazy(() => import('@/pages/driver/DriverDeliveriesPage'));
-const DriverAssistantPage = lazy(() => import('@/pages/driver/DriverAssistantPage'));
-const DriverPerformancePage = lazy(() => import('@/pages/driver/DriverPerformancePage'));
-const DriverProfilePage = lazy(() => import('@/pages/driver/DriverProfilePage'));
 
 /**
  * Global Router definition for Venlix AI platform.
@@ -86,26 +79,6 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/select-role',
-    element: (
-      <ProtectedRoute>
-        <Suspense fallback={<Loading variant="overlay" text="Loading modules..." />}>
-          <SelectRolePage />
-        </Suspense>
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: '/admin',
-    element: <Navigate to="/dashboard" replace />
-  },
-  // Customer alias redirect (since Customer dashboard is not fully implemented yet)
-  {
-    path: '/customer',
-    element: <Navigate to="/dashboard" replace /> 
-  },
-  {
-    path: '/',
     element: (
       <ProtectedRoute>
         <MainLayout />
@@ -113,7 +86,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
-        path: 'dashboard',
+        path: '/dashboard',
         element: (
           <Suspense fallback={<Loading variant="shimmer" text="Loading dashboard..." />}>
             <DashboardPage />
@@ -121,7 +94,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'prediction',
+        path: '/prediction',
         element: (
           <Suspense fallback={<Loading variant="shimmer" text="Loading models..." />}>
             <PredictionPage />
@@ -129,7 +102,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'deliveries',
+        path: '/deliveries',
         element: (
           <Suspense fallback={<Loading variant="shimmer" text="Loading fleet..." />}>
             <DeliveriesPage />
@@ -137,7 +110,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'digital-twin',
+        path: '/digital-twin',
         element: (
           <Suspense fallback={<Loading variant="shimmer" text="Loading replication matrix..." />}>
             <DigitalTwinPage />
@@ -145,7 +118,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'health',
+        path: '/health',
         element: (
           <Suspense fallback={<Loading variant="shimmer" text="Running diagnostics..." />}>
             <HealthPage />
@@ -163,63 +136,9 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    path: '/driver',
-    element: (
-      <ProtectedRoute>
-        <DriverLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: (
-          <Suspense fallback={<Loading variant="shimmer" text="Loading driver dashboard..." />}>
-            <DriverDashboardPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'dashboard',
-        element: (
-          <Suspense fallback={<Loading variant="shimmer" text="Loading driver dashboard..." />}>
-            <DriverDashboardPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'deliveries',
-        element: (
-          <Suspense fallback={<Loading variant="shimmer" text="Loading deliveries..." />}>
-            <DriverDeliveriesPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'assistant',
-        element: (
-          <Suspense fallback={<Loading variant="shimmer" text="Loading assistant..." />}>
-            <DriverAssistantPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'performance',
-        element: (
-          <Suspense fallback={<Loading variant="shimmer" text="Loading performance metrics..." />}>
-            <DriverPerformancePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'profile',
-        element: (
-          <Suspense fallback={<Loading variant="shimmer" text="Loading profile..." />}>
-            <DriverProfilePage />
-          </Suspense>
-        ),
-      },
-    ],
-  },
+    path: '*',
+    element: <Navigate to="/" replace />
+  }
 ]);
 
 export default router;
