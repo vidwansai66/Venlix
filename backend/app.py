@@ -1,45 +1,53 @@
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict, Any
 
-from database import Base, engine
+from schemas import PredictionResponse, PredictionRequest
+from fastapi.responses import JSONResponse
+from services.prediction_service import predict_delivery, CategoryValidationError
 
-from routers.prediction import router as prediction_router
-from routers.deliveries import router as deliveries_router
-from routers.reports import router as reports_router
-from routers.twin import router as twin_router
-# Create Database Tables
-Base.metadata.create_all(bind=engine)
+# Setup Logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("venlix_api")
 
 app = FastAPI(
     title="Venlix AI API",
-    description="Delivery Failure Prediction API",
+    description="Explainable AI for Gated Community Delivery Failure Prediction",
     version="1.0"
 )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change to frontend URL in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 @app.get("/health")
 def health():
-    return {
-        "status": "Healthy",
-        "database": "Connected",
-        "model": "Loaded",
-        "version": "1.0.0"
-    }
+    return {"status": "healthy"}
 
-@app.get("/")
-def home():
-    return {
-        "message": "Welcome to Venlix AI 🚚",
-        "status": "API Running Successfully"
-    }
-
-
-app.include_router(prediction_router)
-app.include_router(deliveries_router)
-app.include_router(reports_router)
-app.include_router(twin_router)
+@app.post("/predict", response_model=PredictionResponse)
+async def predict(prediction: PredictionRequest):
+    logger.info("Prediction received.")
+    data = prediction.model_dump()
+    
+    try:
+        result = predict_delivery(data)
+        logger.info("Prediction completed successfully.")
+        return result
+    except CategoryValidationError as e:
+        logger.error(f"Prediction failed: Invalid {e.field} value.")
+        return JSONResponse(status_code=422, content={
+            "success": False,
+            "message": f"Invalid {e.field} value.",
+            "allowed_values": e.allowed_values
+        })
+    except ValueError as e:
+        logger.error(f"Prediction failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Prediction failed unexpectedly: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during prediction.")
