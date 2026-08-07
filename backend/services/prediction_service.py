@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import logging
 from config import settings
-from datetime import datetime, timezone
+from datetime import datetime
 
 logger = logging.getLogger("venlix_api")
 
@@ -140,7 +140,7 @@ def validate_input(data: dict):
 def get_explainability(input_df, model, raw_data, is_low_risk):
     factors = []
     try:
-        import shap # type: ignore
+        import shap
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(input_df)
         contributions = shap_values[1][0] if isinstance(shap_values, list) else shap_values[0]
@@ -191,6 +191,15 @@ def get_explainability(input_df, model, raw_data, is_low_risk):
 def predict_delivery(data: dict):
     if not model: raise ValueError("Model not loaded.")
 
+    # Apply privacy controls for predictive profiling
+    if data.get("predictive_contact_consent") is False:
+        data["previous_failed_deliveries"] = 0
+        data["customer_reachability_score"] = 0.9
+        if "customer_unavailability_history" in data:
+            data["customer_unavailability_history"] = 0.0
+        if "address_failure_history_rate" in data:
+            data["address_failure_history_rate"] = 0.0
+
     data, raw_data = validate_input(data)
     input_df = pd.DataFrame([data])
     for col in feature_columns:
@@ -198,83 +207,53 @@ def predict_delivery(data: dict):
     input_df = input_df[feature_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
 
     prediction_class = int(model.predict(input_df)[0])
-    probability = float(model.predict_proba(input_df)[0][1])
-    
-    # Calculate risk_score and confidence
-    risk_score = round(probability * 100)
-    
-    # Apply business logic risk floor for critical real-world conditions
-    base_risk = 0
-    if str(raw_data.get("Weather", "")).lower() in ["heavy rain", "storm", "flooding"]: base_risk += 25
-    if str(raw_data.get("Traffic", "")).lower() == "high": base_risk += 15
-    if str(raw_data.get("driver_status", "")).lower() in ["delayed", "accident", "medical emergency"]: base_risk += 35
-    if str(raw_data.get("visitor_pass_status", "")).lower() == "rejected": base_risk += 50
-    elif str(raw_data.get("visitor_pass_status", "")).lower() == "pending": base_risk += 15
-    if str(raw_data.get("customer_availability", "")).lower() in ["unknown", "travelling"]: base_risk += 20
-    if str(raw_data.get("customer_answered_call", "")).lower() == "no": base_risk += 15
+    risk_probability = float(model.predict_proba(input_df)[0][1])
+    risk_score = int(risk_probability * 100)
+    confidence = int(50 + (abs(risk_probability - 0.5) * 100))
 
-    risk_score = min(99, max(risk_score, base_risk))
-    confidence = round(max(probability, 1 - probability) * 100)
-
-    # Determine risk_level
-    if risk_score <= 24: risk_level, prediction_text = "Low", "Low Risk"
-    elif risk_score <= 49: risk_level, prediction_text = "Medium", "Medium Risk"
-    elif risk_score <= 74: risk_level, prediction_text = "High", "High Risk"
+    if risk_score <= 25: risk_level, prediction_text = "Low", "Low Risk"
+    elif risk_score <= 50: risk_level, prediction_text = "Medium", "Medium Risk"
+    elif risk_score <= 75: risk_level, prediction_text = "High", "High Risk"
     else: risk_level, prediction_text = "Critical", "Critical Risk"
 
-    is_low_risk = (risk_score <= 24)
+    is_low_risk = (risk_score <= 25)
     extracted_factors = get_explainability(input_df, model, raw_data, is_low_risk=is_low_risk)
 
     formatted_actions = []
-    time_saved = 0
-    cost_saved = 0
-    fuel_saved = 0.0
+    time_saved, cost_saved, fuel_saved = 0, 0, 0.0
 
-    # Static recommendations based on risk_level with dynamic improvements
-    if risk_level == "Low":
-        formatted_actions = [{"action": "Proceed Normally", "priority": "Low", "expected_improvement": 0}]
-    elif risk_level == "Medium":
-        formatted_actions = [
-            {"action": "Call Customer", "priority": "Medium", "expected_improvement": np.random.randint(8, 20)},
-            {"action": "Verify Address", "priority": "Medium", "expected_improvement": np.random.randint(5, 15)}
-        ]
-    elif risk_level == "High":
-        formatted_actions = [
-            {"action": "Assign Alternate Driver", "priority": "High", "expected_improvement": np.random.randint(10, 18)},
-            {"action": "Update ETA", "priority": "High", "expected_improvement": np.random.randint(4, 10)}
-        ]
-    elif risk_level == "Critical":
-        formatted_actions = [
-            {"action": "Assign Alternate Driver", "priority": "High", "expected_improvement": np.random.randint(10, 18)},
-            {"action": "Request Visitor Approval", "priority": "High", "expected_improvement": np.random.randint(5, 15)},
-            {"action": "Call Customer", "priority": "High", "expected_improvement": np.random.randint(8, 20)},
-            {"action": "Offer Reschedule", "priority": "High", "expected_improvement": np.random.randint(10, 20)},
-            {"action": "Notify Security Gate", "priority": "High", "expected_improvement": np.random.randint(5, 10)}
-        ]
+    if not is_low_risk:
+        for rf in extracted_factors:
+            if rf["factor"] in action_mapping:
+                act, min_imp, max_imp = action_mapping[rf["factor"]]
+                if not any(a["action"] == act for a in formatted_actions):
+                    imp = np.random.randint(min_imp, max_imp + 1)
+                    formatted_actions.append({"action": act, "priority": "High" if rf["impact"] > 80 else "Medium", "expected_improvement": imp})
+                    
+                    if "Alternate" in act or "Delay" in act:
+                        time_saved += np.random.randint(10, 20)
+                        fuel_saved += np.random.uniform(0.5, 1.5)
+                        cost_saved += np.random.randint(50, 100)
+                    elif "Call" in act or "Verify" in act:
+                        time_saved += np.random.randint(5, 10)
+                        cost_saved += np.random.randint(10, 30)
+                    elif "Approval" in act or "Update" in act:
+                        time_saved += np.random.randint(5, 15)
 
-    # Calculate dynamic time, cost, fuel savings based on actions
-    for act_dict in formatted_actions:
-        act = str(act_dict["action"])
-        if "Alternate" in act or "Delay" in act:
-            time_saved += np.random.randint(10, 20)
-            fuel_saved += np.random.uniform(0.5, 1.5)
-            cost_saved += np.random.randint(50, 100)
-        elif "Call" in act or "Verify" in act:
-            time_saved += np.random.randint(5, 10)
-            cost_saved += np.random.randint(10, 30)
-        elif "Approval" in act or "Update" in act:
-            time_saved += np.random.randint(5, 15)
-        elif "Reschedule" in act:
-            time_saved += np.random.randint(20, 40)
-            fuel_saved += np.random.uniform(1.0, 2.0)
-            cost_saved += np.random.randint(50, 150)
-            
-    if risk_level == "Low":
-        time_saved, cost_saved, fuel_saved = 0, 0, 0.0
+        if risk_level == "Critical":
+            # Must return at least 3
+            if len(formatted_actions) < 3: formatted_actions.append({"action": "Escalate to Supervisor", "priority": "High", "expected_improvement": 10})
+            if len(formatted_actions) < 3: formatted_actions.append({"action": "Coordinate with Security", "priority": "High", "expected_improvement": 5})
+
+        if not formatted_actions:
+            formatted_actions.append({"action": "Monitor Delivery", "priority": "Medium", "expected_improvement": 5})
+            time_saved = 2
+    else:
+        formatted_actions.append({"action": "Proceed Normally", "priority": "Low", "expected_improvement": 0})
 
     base_success = 100 - risk_score
-    total_improvement = sum([int(a["expected_improvement"]) for a in formatted_actions])
-    estimated_success = min(99, max(0, base_success + total_improvement))
+    total_improvement = sum([a["expected_improvement"] for a in formatted_actions])
+    estimated_success = min(99, base_success + total_improvement)
     
     return {
         "success": True,
@@ -291,5 +270,5 @@ def predict_delivery(data: dict):
         "estimated_cost_saved_rupees": cost_saved,
         "estimated_fuel_saved_liters": round(fuel_saved, 1),
         "model": "Venlix-XGBoost-v2",
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }

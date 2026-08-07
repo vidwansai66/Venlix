@@ -116,3 +116,68 @@ class PredictionResponse(BaseModel):
             ]
         }
     )
+
+from enum import Enum as PyEnum
+from datetime import datetime
+
+class ActorEnum(str, PyEnum):
+    system = "system"
+    ml_model = "ml_model"
+    llm_agent = "llm_agent"
+    dispatcher = "dispatcher"
+    driver = "driver"
+    customer = "customer"
+
+class DeliveryCaseCreate(PredictionRequest):
+    predictive_contact_consent: bool = Field(True, description="Consent for predictive contact")
+
+class PrivacyUpdateRequest(BaseModel):
+    predictive_contact_consent: bool = Field(..., description="Consent for predictive contact")
+
+class DeliveryCaseResponse(DeliveryCaseCreate):
+    id: int
+    consent_timestamp: Optional[datetime] = None
+    retention_expires_at: Optional[datetime] = None
+    created_at: datetime
+    
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_email: Optional[str] = None
+    delivery_address: Optional[str] = None
+    society_name: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class AgentLogCreate(BaseModel):
+    delivery_case_id: int
+    actor: ActorEnum
+    action_details: str
+
+class AgentLogResponse(AgentLogCreate):
+    id: int
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class DashboardReport(BaseModel):
+    total_predictions: int
+    delivery_failures: int
+    delivery_success: int
+    failure_rate: str
+    average_confidence: float
+
+class DashboardHealth(BaseModel):
+    status: str
+    database: str
+    model: str
+    version: str
+
+class LiveStats(BaseModel):
+    todays_deliveries: int
+    high_risk_deliveries: int
+    average_risk_score: float
+    success_rate: float
+    fuel_saved: float
+    cost_saved: float
+    time_saved_hours: float
+    ai_prevented_failures: int
