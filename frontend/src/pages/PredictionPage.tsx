@@ -1,1005 +1,425 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  User,
-  MapPin,
-  Truck,
-  Activity,
-  Sliders,
-  Calendar,
-  Sparkles,
-  HelpCircle,
-  AlertTriangle,
-  CheckCircle,
-  Database,
-  Cpu,
-  Brain
-} from 'lucide-react';
-import apiClient from '@/services/apiClient';
+import { Brain, ShieldAlert, Activity, Sparkles, AlertTriangle, Loader2, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Card, CardContent } from '@/components/ui/Card';
+import apiClient from '@/services/apiClient';
 
-// Form interface definition
-interface DeliveryItem {
-  id: number;
-  prediction: string;
-  confidence: number;
-  risk_score: number;
-  created_at: string;
-}
-
-// Zod Validation Schema
-const predictionSchema = z.object({
-  // Driver Information
-  Agent_Age: z.coerce.number().min(18, 'Min age is 18').max(70, 'Max age is 70'),
-  Agent_Rating: z.coerce.number().min(1.0, 'Min rating is 1.0').max(5.0, 'Max rating is 5.0'),
-
-  // Store Location
-  Store_Latitude: z.coerce.number().min(-90, 'Min latitude -90').max(90, 'Max latitude 90'),
-  Store_Longitude: z.coerce.number().min(-180, 'Min longitude -180').max(180, 'Max longitude 180'),
-
-  // Drop Location
-  Drop_Latitude: z.coerce.number().min(-90, 'Min latitude -90').max(90, 'Max latitude 90'),
-  Drop_Longitude: z.coerce.number().min(-180, 'Min longitude -180').max(180, 'Max longitude 180'),
-
-  // Delivery Details
-  Weather: z.coerce.number().int().min(1).max(5),
-  Traffic: z.coerce.number().int().min(1).max(4),
-  Vehicle: z.coerce.number().int().min(1).max(4),
-  Area: z.coerce.number().int().min(1).max(3),
-  Category: z.coerce.number().int().min(1).max(5),
-  Delivery_Time: z.coerce.number().min(1, 'Time must be positive'),
-  pin_code: z.coerce.number().int().min(100000, 'Must be 6 digits').max(999999, 'Must be 6 digits'),
-
-  // Driver Performance
-  driver_on_time_rate: z.coerce.number().min(0, 'Min 0.0').max(1.0, 'Max 1.0'),
-  customer_unavailability_history: z.coerce.number().min(0, 'Min 0.0').max(1.0, 'Max 1.0'),
-  address_failure_history_rate: z.coerce.number().min(0, 'Min 0.0').max(1.0, 'Max 1.0'),
-
-  // Order Info
-  order_value: z.coerce.number().min(1, 'Must be positive'),
-  slot_width_minutes: z.coerce.number().min(1, 'Must be positive'),
-  distance_km: z.coerce.number().min(0.1, 'Min distance 100m'),
-  risk_score: z.coerce.number().min(0, 'Min 0.0').max(1.0, 'Max 1.0'),
-
-  // Date Information
-  day_of_week: z.coerce.number().int().min(1).max(7),
-  month: z.coerce.number().int().min(1).max(12),
-  is_weekend: z.coerce.number().int().min(0).max(1),
-  pickup_delay_minutes: z.coerce.number().min(0, 'Must be positive'),
-  hour_of_day: z.coerce.number().int().min(0).max(23),
-});
-
-type PredictionFormData = z.infer<typeof predictionSchema>;
-
-// Sensible defaults representing a normal dispatch route to ease testing
-const defaultValues: PredictionFormData = {
-  Agent_Age: 28,
-  Agent_Rating: 4.8,
-  Store_Latitude: 12.9716,
-  Store_Longitude: 77.5946,
-  Drop_Latitude: 12.9352,
-  Drop_Longitude: 77.6245,
-  Weather: 1, // Sunny
-  Traffic: 2, // Medium
-  Vehicle: 1, // Motorcycle
-  Area: 1, // Urban
-  Category: 1, // Groceries
-  Delivery_Time: 30,
-  pin_code: 560001,
-  driver_on_time_rate: 0.92,
-  customer_unavailability_history: 0.05,
-  address_failure_history_rate: 0.02,
-  order_value: 650,
-  slot_width_minutes: 30,
-  distance_km: 4.6,
-  risk_score: 0.35,
-  day_of_week: 1, // Monday
-  month: 8, // August
-  is_weekend: 0, // Weekday
-  pickup_delay_minutes: 3.0,
-  hour_of_day: 15,
+const getRiskColor = (riskLevel: string) => {
+  switch (riskLevel) {
+    case 'Low': return 'bg-emerald-500 text-white';
+    case 'Medium': return 'bg-orange-500 text-white';
+    case 'High': return 'bg-red-500 text-white';
+    case 'Critical': return 'bg-red-900 text-white';
+    default: return 'bg-slate-500 text-white';
+  }
 };
 
-// Help Tooltip Component
-const FormTooltip = ({ text }: { text: string }) => (
-  <div className="group relative inline-block text-slate-400 hover:text-slate-600 cursor-pointer ml-1.5 shrink-0 select-none">
-    <HelpCircle size={13} className="stroke-[2.5]" />
-    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex w-48 flex-col items-center bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-lg font-medium leading-normal z-50 text-center">
-      {text}
-      <span className="w-2.5 h-2.5 bg-slate-900 rotate-45 -mt-1.5 absolute top-full left-1/2 -translate-x-1/2" />
-    </span>
-  </div>
-);
-
-// SVG Circular Progress Bar
-const CircularProgress = ({ value, colorClass = 'stroke-primary' }: { value: number; colorClass?: string }) => {
-  const radius = 30;
-  const strokeWidth = 5;
-  const circumference = 2 * Math.PI * radius;
-  const progressOffset = circumference - (value / 100) * circumference;
-
-  return (
-    <div className="relative flex items-center justify-center h-20 w-20 shrink-0">
-      <svg className="w-full h-full transform -rotate-90">
-        <circle
-          cx="40"
-          cy="40"
-          r={radius}
-          className="stroke-brand-border"
-          strokeWidth={strokeWidth}
-          fill="transparent"
-        />
-        <motion.circle
-          cx="40"
-          cy="40"
-          r={radius}
-          className={colorClass}
-          strokeWidth={strokeWidth}
-          fill="transparent"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: progressOffset }}
-          transition={{ duration: 1, ease: 'easeOut' }}
-        />
-      </svg>
-      <span className="absolute text-xs font-black text-brand-text">{Math.round(value)}%</span>
-    </div>
-  );
+const getRiskTextColor = (riskLevel: string) => {
+  switch (riskLevel) {
+    case 'Low': return 'text-emerald-500';
+    case 'Medium': return 'text-orange-500';
+    case 'High': return 'text-red-500';
+    case 'Critical': return 'text-red-900';
+    default: return 'text-slate-500';
+  }
 };
 
 export const PredictionPage = () => {
-  const [predictionResult, setPredictionResult] = useState<{
-    id: number;
-    delivery_failed: boolean;
-    prediction: string;
-    confidence: number;
-  } | null>(null);
+  const [isBackendHealthy, setIsBackendHealthy] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [predictionResult, setPredictionResult] = useState<any>(null);
 
-  const [isPredicting, setIsPredicting] = useState<boolean>(false);
-  const [predictionError, setPredictionError] = useState<string | null>(null);
-  
-  // History list
-  const [history, setHistory] = useState<DeliveryItem[]>([]);
-  const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(false);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<any>({
-    resolver: zodResolver(predictionSchema) as any,
-    defaultValues,
+  // Form State
+  const [formData, setFormData] = useState({
+    customer_answered_call: 'Yes',
+    customer_availability: 'Home',
+    visitor_pass_status: 'Approved',
+    driver_status: 'Available',
+    Weather: 'Clear',
+    Traffic: 'Low',
+    society_security_level: 'Open',
+    previous_failed_deliveries: 0,
+    gate_wait_time: 2,
+    estimated_arrival_delay: 0,
   });
 
-  // Load last 3 predictions from deliveries endpoint
-  const fetchPredictionHistory = useCallback(async () => {
-    setIsHistoryLoading(true);
-    try {
-      const res = await apiClient.get<DeliveryItem[]>('/deliveries/');
-      const sorted = (res.data || []).sort((a, b) => b.id - a.id);
-      setHistory(sorted.slice(0, 3));
-    } catch (err) {
-      console.error('Error fetching prediction history:', err);
-    } finally {
-      setIsHistoryLoading(false);
-    }
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        await apiClient.get('/health');
+        setIsBackendHealthy(true);
+      } catch (err) {
+        setIsBackendHealthy(false);
+      }
+    };
+    checkHealth();
   }, []);
 
-  useEffect(() => {
-    fetchPredictionHistory();
-  }, [fetchPredictionHistory]);
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'previous_failed_deliveries' || name === 'gate_wait_time' || name === 'estimated_arrival_delay' ? Number(value) : value
+    }));
+  };
 
-  // Handle Form Submission
-  const onSubmit = async (data: PredictionFormData) => {
-    setIsPredicting(true);
-    setPredictionError(null);
+  const handlePredict = async () => {
+    setLoading(true);
+    setError(null);
     setPredictionResult(null);
 
+    // Build the full payload with defaults for missing fields
+    const payload = {
+      Agent_Age: 30,
+      Agent_Rating: 4.5,
+      Weather: formData.Weather,
+      Traffic: formData.Traffic,
+      Vehicle: 'Bike',
+      Area: 'Urban',
+      Delivery_Time: 30,
+      customer_answered_call: formData.customer_answered_call,
+      customer_response_time: 5,
+      customer_availability: formData.customer_availability,
+      visitor_pass_status: formData.visitor_pass_status,
+      society_security_level: formData.society_security_level,
+      gate_wait_time: formData.gate_wait_time,
+      driver_status: formData.driver_status,
+      previous_failed_deliveries: formData.previous_failed_deliveries,
+      address_confidence: 0.9,
+      preferred_delivery_slot: 'Morning',
+      estimated_arrival_delay: formData.estimated_arrival_delay,
+      driver_experience: 24,
+      pickup_delay_minutes: 5.0,
+      hour_of_day: 14,
+      day_of_week: 'Monday',
+      is_weekend: 0,
+      arrival_within_preferred_slot: 1,
+      customer_reachability_score: 0.9,
+      society_accessibility_score: 0.85,
+      driver_reliability_score: 0.95
+    };
+
     try {
-      const res = await apiClient.post('/prediction/', data);
-      setPredictionResult(res.data);
-      // Refresh history list immediately
-      fetchPredictionHistory();
+      const response = await apiClient.post('/predict', payload);
+      setPredictionResult(response.data);
     } catch (err: any) {
-      console.error('Prediction failed:', err);
-      setPredictionError(
-        err.response?.data?.detail || 
-        err.message || 
-        'Could not execute model inference. Verify FastAPI backend connection.'
-      );
+      if (err.response) {
+        if (err.response.status === 422) {
+          setError('Validation error: ' + err.response.data.message);
+        } else if (err.response.status === 500) {
+          setError('Internal server error during prediction.');
+        } else {
+          setError('Model loading error or backend issue.');
+        }
+      } else {
+        setError('Network failure. Backend unavailable.');
+      }
     } finally {
-      setIsPredicting(false);
+      setLoading(false);
     }
   };
 
+  if (isBackendHealthy === false) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] animate-fade-in text-center">
+        <WifiOff size={64} className="text-danger mb-4" />
+        <h2 className="text-3xl font-extrabold text-brand-text mb-2">Backend Offline</h2>
+        <p className="text-muted max-w-md">The Venlix AI backend could not be reached. Please check if the server is running.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Top Page Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 animate-fade-in pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-brand-text tracking-tight">
-            AI Delivery Failure Prediction
+          <h1 className="text-3xl font-extrabold text-brand-text tracking-tight flex items-center gap-3">
+            Prediction Engine 
+            <Badge variant="primary" className="bg-primary/10 text-primary border-primary/20 animate-pulse">
+              <Brain size={14} className="mr-1"/> AI Active
+            </Badge>
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Configure shipping variables to classify delivery failure risks using the trained XGBoost model.
+            Test the AI model by providing real-time delivery features.
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => reset(defaultValues)}
-          disabled={isPredicting}
-        >
-          Reset Fields
-        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Left Side (65% width): Prediction Form */}
-        <div className="lg:col-span-8">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Input Form Column */}
+        <Card className="border-brand-border bg-brand-card shadow-lg">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-black text-brand-text mb-6 flex items-center gap-2">
+              <Sparkles size={18} className="text-primary"/> Simulation Parameters
+            </h3>
             
-            {/* 1. Driver Information Section */}
-            <Card className="hover:border-primary/40 transition-all duration-300">
-              <CardHeader className="border-b border-brand-border pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg">
-                    <User size={16} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-bold">Driver Information</CardTitle>
-                    <CardDescription className="text-xs">Specify age and performance rating metrics.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Agent Age
-                    <FormTooltip text="Age of the delivery agent. Range: 18 to 70 years." />
-                  </label>
-                  <input
-                    type="number"
-                    disabled={isPredicting}
-                    placeholder="e.g. 28"
-                    className={`flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${
-                      errors.Agent_Age ? 'border-danger/60 focus:ring-danger/20 focus:border-danger' : ''
-                    }`}
-                    {...register('Agent_Age')}
-                  />
-                  {errors.Agent_Age?.message && <p className="text-xs font-medium text-danger">{errors.Agent_Age.message as string}</p>}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Agent Rating
-                    <FormTooltip text="Average courier star rating history. Scale: 1.0 to 5.0." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    disabled={isPredicting}
-                    placeholder="e.g. 4.8"
-                    className={`flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${
-                      errors.Agent_Rating ? 'border-danger/60 focus:ring-danger/20 focus:border-danger' : ''
-                    }`}
-                    {...register('Agent_Rating')}
-                  />
-                  {errors.Agent_Rating?.message && <p className="text-xs font-medium text-danger">{errors.Agent_Rating.message as string}</p>}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 2. Locations Section */}
-            <Card className="hover:border-primary/40 transition-all duration-300">
-              <CardHeader className="border-b border-brand-border pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg">
-                    <MapPin size={16} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-bold">Location Coordinates</CardTitle>
-                    <CardDescription className="text-xs">Origin and destination GPS coordinates.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-5">
-                {/* Store Coordinates */}
-                <div className="space-y-3 p-4 rounded-xl border border-brand-border bg-brand-background">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest border-b border-slate-100 pb-1.5">Store Origin</h4>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500">Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={isPredicting}
-                      className="flex h-10 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                      {...register('Store_Latitude')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500">Longitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={isPredicting}
-                      className="flex h-10 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                      {...register('Store_Longitude')}
-                    />
-                  </div>
-                </div>
-
-                {/* Drop Coordinates */}
-                <div className="space-y-3 p-4 rounded-xl border border-brand-border bg-brand-background">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest border-b border-slate-100 pb-1.5">Drop Destination</h4>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500">Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={isPredicting}
-                      className="flex h-10 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                      {...register('Drop_Latitude')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500">Longitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      disabled={isPredicting}
-                      className="flex h-10 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                      {...register('Drop_Longitude')}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 3. Delivery Details Section */}
-            <Card className="hover:border-primary/40 transition-all duration-300">
-              <CardHeader className="border-b border-brand-border pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-purple-500/10 text-purple-500 rounded-lg">
-                    <Truck size={16} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-bold">Delivery Parameters & Environment</CardTitle>
-                    <CardDescription className="text-xs">Contextual routing signals and vehicle type.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Weather Condition
-                    <FormTooltip text="Environmental status. Sunny (1), Cloudy (2), Rainy (3), Stormy (4), Sandstorm (5)." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('Weather')}
-                  >
-                    <option value={1}>Sunny</option>
-                    <option value={2}>Cloudy</option>
-                    <option value={3}>Rainy</option>
-                    <option value={4}>Stormy</option>
-                    <option value={5}>Sandstorm / Foggy</option>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Customer Answered Call</label>
+                  <select name="customer_answered_call" value={formData.customer_answered_call} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
                   </select>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Traffic Density
-                    <FormTooltip text="Congestion status. Low (1), Medium (2), High (3), Jam (4)." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('Traffic')}
-                  >
-                    <option value={1}>Low</option>
-                    <option value={2}>Medium</option>
-                    <option value={3}>High</option>
-                    <option value={4}>Jam</option>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Customer Availability</label>
+                  <select name="customer_availability" value={formData.customer_availability} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="Home">Home</option>
+                    <option value="Office">Office</option>
+                    <option value="Travelling">Travelling</option>
+                    <option value="Unknown">Unknown</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Vehicle Type
-                    <FormTooltip text="Courier transportation mode. Motorcycle (1), Scooter (2), Bicycle (3), Car (4)." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('Vehicle')}
-                  >
-                    <option value={1}>Motorcycle</option>
-                    <option value={2}>Scooter</option>
-                    <option value={3}>Bicycle</option>
-                    <option value={4}>Car / Van</option>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Visitor Pass Status</label>
+                  <select name="visitor_pass_status" value={formData.visitor_pass_status} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="Approved">Approved</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Rejected">Rejected</option>
                   </select>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Operational Area
-                    <FormTooltip text="Hub topological zone. Urban (1), Suburban (2), Rural (3)." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('Area')}
-                  >
-                    <option value={1}>Urban</option>
-                    <option value={2}>Suburban</option>
-                    <option value={3}>Rural</option>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Driver Status</label>
+                  <select name="driver_status" value={formData.driver_status} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="Available">Available</option>
+                    <option value="Delayed">Delayed</option>
+                    <option value="Accident">Accident</option>
+                    <option value="Medical Emergency">Medical Emergency</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Cargo Category
-                    <FormTooltip text="Type of goods being dispatched. Groceries (1), Electronics (2), Apparel (3), Documents (4), Medicines (5)." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('Category')}
-                  >
-                    <option value={1}>Groceries</option>
-                    <option value={2}>Electronics</option>
-                    <option value={3}>Apparel</option>
-                    <option value={4}>Documents / Mail</option>
-                    <option value={5}>Medicines / Biologicals</option>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Weather</label>
+                  <select name="Weather" value={formData.Weather} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="Clear">Clear</option>
+                    <option value="Light Rain">Light Rain</option>
+                    <option value="Heavy Rain">Heavy Rain</option>
+                    <option value="Storm">Storm</option>
                   </select>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Target Delivery Time
-                    <FormTooltip text="Allocated dispatch timeline in minutes." />
-                  </label>
-                  <input
-                    type="number"
-                    disabled={isPredicting}
-                    placeholder="e.g. 30"
-                    className={`flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${
-                      errors.Delivery_Time ? 'border-danger/60 focus:ring-danger/20 focus:border-danger' : ''
-                    }`}
-                    {...register('Delivery_Time')}
-                  />
-                  {errors.Delivery_Time?.message && <p className="text-xs font-medium text-danger">{errors.Delivery_Time.message as string}</p>}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Postal Code (6 Digits)
-                    <FormTooltip text="Regional Indian pin code parameter. Range: 100000 to 999999." />
-                  </label>
-                  <input
-                    type="number"
-                    disabled={isPredicting}
-                    placeholder="e.g. 560001"
-                    className={`flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${
-                      errors.pin_code ? 'border-danger/60 focus:ring-danger/20 focus:border-danger' : ''
-                    }`}
-                    {...register('pin_code')}
-                  />
-                  {errors.pin_code?.message && <p className="text-xs font-medium text-danger">{errors.pin_code.message as string}</p>}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 4. Driver Performance Section */}
-            <Card className="hover:border-primary/40 transition-all duration-300">
-              <CardHeader className="border-b border-brand-border pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg">
-                    <Activity size={16} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-bold">Driver Performance Metrics</CardTitle>
-                    <CardDescription className="text-xs">Historical performance parameters of the courier.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    On-Time Rate
-                    <FormTooltip text="Historical on-time completion percentage. Value: 0.0 to 1.0 (90% = 0.9)." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('driver_on_time_rate')}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Unavailability Rate
-                    <FormTooltip text="Frequency of customer unavailable setbacks. Value: 0.0 to 1.0." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('customer_unavailability_history')}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Address Failure Rate
-                    <FormTooltip text="Historical bad address resolution failures. Value: 0.0 to 1.0." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('address_failure_history_rate')}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 5. Order Information & Risk */}
-            <Card className="hover:border-primary/40 transition-all duration-300">
-              <CardHeader className="border-b border-brand-border pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg">
-                    <Sliders size={16} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-bold">Order Financials & Risk Profile</CardTitle>
-                    <CardDescription className="text-xs">Order values, routing distance, and baseline risks.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Order Value (INR)
-                    <FormTooltip text="Order value metrics. Influences route priority." />
-                  </label>
-                  <input
-                    type="number"
-                    disabled={isPredicting}
-                    placeholder="e.g. 500"
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('order_value')}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Delivery Slot Width
-                    <FormTooltip text="Customer promise buffer width in minutes." />
-                  </label>
-                  <input
-                    type="number"
-                    disabled={isPredicting}
-                    placeholder="e.g. 30"
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('slot_width_minutes')}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Route Distance (KM)
-                    <FormTooltip text="GIS mapped topological distance in kilometers." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    disabled={isPredicting}
-                    placeholder="e.g. 4.8"
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('distance_km')}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Baseline Risk Score
-                    <FormTooltip text="Initial safety classification score. Value: 0.0 to 1.0." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    disabled={isPredicting}
-                    placeholder="e.g. 0.35"
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('risk_score')}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 6. Date & Time Context Section */}
-            <Card className="hover:border-primary/40 transition-all duration-300">
-              <CardHeader className="border-b border-brand-border pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg">
-                    <Calendar size={16} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm font-bold">Temporal Context</CardTitle>
-                    <CardDescription className="text-xs">Schedule and time details.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Day of Week
-                    <FormTooltip text="Day metrics. Mon (1), Tue (2), ..., Sun (7)." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('day_of_week')}
-                  >
-                    <option value={1}>Monday</option>
-                    <option value={2}>Tuesday</option>
-                    <option value={3}>Wednesday</option>
-                    <option value={4}>Thursday</option>
-                    <option value={5}>Friday</option>
-                    <option value={6}>Saturday</option>
-                    <option value={7}>Sunday</option>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Traffic</label>
+                  <select name="Traffic" value={formData.Traffic} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Month
-                    <FormTooltip text="Calendar month value. Range: 1 to 12." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('month')}
-                  >
-                    <option value={1}>January</option>
-                    <option value={2}>February</option>
-                    <option value={3}>March</option>
-                    <option value={4}>April</option>
-                    <option value={5}>May</option>
-                    <option value={6}>June</option>
-                    <option value={7}>July</option>
-                    <option value={8}>August</option>
-                    <option value={9}>September</option>
-                    <option value={10}>October</option>
-                    <option value={11}>November</option>
-                    <option value={12}>December</option>
-                  </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Gate Wait Time (mins)</label>
+                  <input type="number" name="gate_wait_time" value={formData.gate_wait_time} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Weekend Status
-                    <FormTooltip text="Indicate whether the dispatch is scheduled on a weekend." />
-                  </label>
-                  <select
-                    disabled={isPredicting}
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('is_weekend')}
-                  >
-                    <option value={0}>Weekday</option>
-                    <option value={1}>Weekend</option>
-                  </select>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Est. Arrival Delay (mins)</label>
+                  <input type="number" name="estimated_arrival_delay" value={formData.estimated_arrival_delay} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
+              </div>
 
-                <div className="space-y-1.5 md:col-span-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Pickup Delay (Min)
-                    <FormTooltip text="Initial delay before courier departs from the store." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    disabled={isPredicting}
-                    placeholder="e.g. 3.0"
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('pickup_delay_minutes')}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center">
-                    Hour of Day
-                    <FormTooltip text="24-hour timestamp of checkout. Range: 0 to 23." />
-                  </label>
-                  <input
-                    type="number"
-                    disabled={isPredicting}
-                    placeholder="e.g. 15"
-                    className="flex h-11 w-full rounded-xl border border-brand-border bg-brand-background px-3.5 py-2 text-brand-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-                    {...register('hour_of_day')}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Form Submit Trigger */}
-            <div className="pt-2">
-              <Button
-                variant="primary"
-                type="submit"
-                isLoading={isPredicting}
-                disabled={isPredicting}
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 border-none rounded-xl text-white font-bold text-base shadow-lg shadow-blue-500/25 gap-2"
-                leftIcon={<Sparkles size={18} className="animate-pulse text-cyan-200" />}
-              >
-                {isPredicting ? 'Analyzing Route Parameters...' : 'Predict Delivery Failure Risk'}
-              </Button>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Previous Failed Deliveries</label>
+                <input type="number" name="previous_failed_deliveries" value={formData.previous_failed_deliveries} onChange={handleChange} className="w-full h-10 px-3 bg-brand-background border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
             </div>
 
-          </form>
-        </div>
+            <Button 
+              variant="primary" 
+              className="w-full mt-6 bg-gradient-to-r from-primary to-purple-600 border-none shadow-[0_0_15px_rgba(124,58,237,0.3)] h-12 text-lg"
+              onClick={handlePredict}
+              disabled={loading}
+            >
+              {loading ? (
+                <><Loader2 className="animate-spin mr-2" size={20} /> Predicting Risk...</>
+              ) : (
+                <><Brain className="mr-2" size={20} /> Generate Prediction</>
+              )}
+            </Button>
 
-        {/* Right Side (35% width): AI Prediction Result Card & History */}
-        <div className="lg:col-span-4 space-y-6">
-          
+            {error && (
+              <div className="mt-4 p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm font-bold flex items-center gap-2">
+                <AlertTriangle size={18} /> {error}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Results Column */}
+        <div className="space-y-6">
           <AnimatePresence mode="wait">
-            
-            {/* Case 1: Fetch/Network Error Banners */}
-            {predictionError && (
-              <motion.div
-                key="error"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
+            {!predictionResult ? (
+              <motion.div 
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full flex flex-col items-center justify-center p-12 text-center bg-brand-card border border-brand-border rounded-xl shadow-lg min-h-[400px]"
               >
-                <Card className="border-danger/30 bg-danger/5 shadow-soft">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2 text-danger">
-                      <AlertTriangle size={18} />
-                      <CardTitle className="text-sm font-bold">Inference Error</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-xs text-danger/80 leading-relaxed font-semibold">
-                      {predictionError}
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onSubmit(defaultValues)}
-                      className="w-full text-danger border-danger/25 hover:bg-danger/10"
-                    >
-                      Retry Inference
-                    </Button>
-                  </CardContent>
-                </Card>
+                <div className="w-20 h-20 bg-brand-background rounded-full flex items-center justify-center mb-6 border border-brand-border shadow-inner">
+                  <Brain size={40} className="text-muted" />
+                </div>
+                <h3 className="text-xl font-bold text-brand-text mb-2">No prediction yet</h3>
+                <p className="text-sm font-medium text-muted max-w-md">
+                  Adjust parameters on the left and click Generate Prediction to see AI analysis.
+                </p>
               </motion.div>
-            )}
-
-            {/* Case 2: Currently Predicting Progress Screen */}
-            {isPredicting && (
-              <motion.div
-                key="predicting"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="space-y-4"
-              >
-                <Card className="border-blue-200/50 bg-blue-50/5 shadow-soft text-center py-10 px-6">
-                  <CardContent className="space-y-6 flex flex-col items-center">
-                    <div className="relative">
-                      <span className="absolute inset-0 rounded-full bg-blue-500/20 blur-xl animate-ping" />
-                      <div className="p-4 bg-blue-600/10 text-blue-500 rounded-full border border-blue-500/25">
-                        <Cpu size={36} className="animate-spin stroke-[1.5]" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-base font-bold text-slate-800 tracking-tight">Analyzing Delivery...</h3>
-                      <p className="text-xs text-slate-500 leading-normal max-w-xs">
-                        Passing dispatch parameters to trained gradient-boosted decision trees...
-                      </p>
-                    </div>
-                    <div className="w-full max-w-xs bg-slate-100 h-1.5 rounded-full overflow-hidden relative">
-                      <motion.div
-                        className="bg-blue-600 h-full rounded-full"
-                        initial={{ width: '0%' }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: 1.8, ease: 'easeInOut', repeat: Infinity }}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {/* Case 3: Empty State Placeholder */}
-            {!predictionResult && !isPredicting && !predictionError && (
-              <motion.div
-                key="placeholder"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="space-y-4"
-              >
-                <Card className="border-slate-200/80 bg-white p-6 shadow-soft text-center py-12">
-                  <CardContent className="space-y-4 flex flex-col items-center">
-                    <div className="p-4 bg-slate-50 border border-slate-100 text-slate-400 rounded-full shadow-inner animate-float">
-                      <Brain size={32} className="stroke-[1.5]" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <h3 className="text-sm font-bold text-slate-850">Awaiting Model Parameters</h3>
-                      <p className="text-xs text-slate-500 max-w-[220px] leading-relaxed">
-                        Submit the telemetry form to run the prediction classifier.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {/* Case 4: Displays Prediction Results */}
-            {predictionResult && !isPredicting && (
+            ) : (
               <motion.div
                 key="result"
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ type: 'spring', bounce: 0.1, duration: 0.4 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
               >
-                <Card
-                  className={`border-t-4 shadow-premium relative overflow-hidden ${
-                    predictionResult.delivery_failed
-                      ? 'border-t-danger border-slate-200 bg-white'
-                      : 'border-t-success border-slate-200 bg-white'
-                  }`}
-                >
-                  
-                  {/* Backdrop Glow effect */}
-                  <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-[60px] opacity-10 pointer-events-none ${
-                    predictionResult.delivery_failed ? 'bg-danger' : 'bg-success'
-                  }`} />
-
-                  <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base font-extrabold text-slate-900">Inference Classification</CardTitle>
-                      <CardDescription className="text-xs mt-0.5">XGBoost prediction results.</CardDescription>
-                    </div>
-                    <Badge variant={predictionResult.delivery_failed ? 'danger' : 'success'} pill>
-                      {predictionResult.delivery_failed ? 'Failure Warning' : 'Safe Route'}
-                    </Badge>
-                  </CardHeader>
-                  
-                  <CardContent className="pt-6 space-y-6">
-                    
-                    {/* Status Visual Panel */}
-                    <div className="flex items-center gap-4 p-4 rounded-2xl border border-slate-50 bg-slate-50/20">
-                      {predictionResult.delivery_failed ? (
-                        <div className="p-3 bg-danger/10 text-danger rounded-xl">
-                          <AlertTriangle size={26} className="animate-pulse" />
-                        </div>
-                      ) : (
-                        <div className="p-3 bg-success/10 text-success rounded-xl">
-                          <CheckCircle size={26} className="stroke-[2.5]" />
-                        </div>
-                      )}
-                      
-                      <div className="flex-1">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">AI Classification</span>
-                        <h3 className={`text-base font-extrabold ${
-                          predictionResult.delivery_failed ? 'text-danger' : 'text-success'
-                        }`}>
+                {/* Hero Result */}
+                <Card className={`border overflow-hidden relative shadow-lg ${
+                  predictionResult.risk_level === 'Low' ? 'border-success/50 bg-success/5' :
+                  predictionResult.risk_level === 'Medium' ? 'border-warning/50 bg-warning/5' :
+                  'border-danger/50 bg-danger/5'
+                }`}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Brain size={120} />
+                  </div>
+                  <CardContent className="p-6 relative z-10">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <Badge className={`${getRiskColor(predictionResult.risk_level)} border-none shadow-sm mb-2`}>
+                          {predictionResult.risk_level} Risk
+                        </Badge>
+                        <h2 className={`text-3xl font-black ${getRiskTextColor(predictionResult.risk_level)}`}>
                           {predictionResult.prediction}
-                        </h3>
+                        </h2>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Confidence</p>
+                        <p className="text-2xl font-black text-brand-text">{predictionResult.confidence}%</p>
                       </div>
                     </div>
-
-                    {/* Gauge Circle Confidence Indicator */}
-                    <div className="flex items-center gap-6 p-4 rounded-2xl border border-slate-50 bg-slate-50/20">
-                      <CircularProgress
-                        value={predictionResult.confidence <= 1 ? predictionResult.confidence * 100 : predictionResult.confidence}
-                        colorClass={predictionResult.delivery_failed ? 'stroke-danger' : 'stroke-success'}
-                      />
-                      <div className="space-y-1">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Prediction Confidence</span>
-                        <h4 className="text-sm font-bold text-slate-800">
-                          {predictionResult.delivery_failed ? 'Severe risk likelihood' : 'Highly confident ETA'}
-                        </h4>
-                        <p className="text-[10px] text-slate-400">Validated against historical routes.</p>
+                    
+                    <div className="flex items-center gap-6 mt-6 pt-6 border-t border-current/10">
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Risk Score</p>
+                        <p className={`text-xl font-black ${getRiskTextColor(predictionResult.risk_level)}`}>{predictionResult.risk_score}/100</p>
+                      </div>
+                      <div className="flex-1">
+                         <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${predictionResult.risk_score}%` }}
+                            transition={{ duration: 1 }}
+                            className={`h-full ${getRiskColor(predictionResult.risk_level)}`} 
+                          />
+                        </div>
                       </div>
                     </div>
-
-                    {/* Summary Parameters List */}
-                    <div className="space-y-2.5 border-t border-slate-100 pt-4">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Dispatch Summary</h4>
-                      
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Delivery Database ID</span>
-                        <span className="font-bold text-slate-800">#{predictionResult.id}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Weather Condition</span>
-                        <span className="font-semibold text-slate-700">Sunny (Standard)</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Traffic Congestion</span>
-                        <span className="font-semibold text-slate-700">Medium</span>
-                      </div>
-                    </div>
-
                   </CardContent>
                 </Card>
-              </motion.div>
-            )}
 
-          </AnimatePresence>
-
-          {/* History Panel (Below Result Card) */}
-          <Card className="hover:border-slate-200 transition-all duration-300">
-            <CardHeader className="border-b border-slate-50 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold">Prediction Logs History</CardTitle>
-                <Database size={15} className="text-slate-400" />
-              </div>
-              <CardDescription className="text-xs">Latest 3 dispatches recorded in DB.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isHistoryLoading ? (
-                <div className="p-4 space-y-2 animate-pulse">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-10 bg-slate-100 rounded-lg w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div>
-                  {history.length === 0 ? (
-                    <div className="p-6 text-center text-slate-450 text-xs">
-                      No historical prediction logs.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {history.map((item) => (
-                        <div key={item.id} className="p-4 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors">
-                          <div className="space-y-1">
-                            <span className="font-bold text-slate-800 block">Dispatch #{item.id}</span>
-                            <span className="text-[10px] text-slate-400">
-                              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                {/* AI Insights & Factors */}
+                {predictionResult.risk_factors && predictionResult.risk_factors.length > 0 && (
+                  <Card className="border-brand-border bg-brand-card shadow-lg">
+                    <CardContent className="p-5">
+                      <h3 className="text-sm font-black text-brand-text uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <AlertTriangle size={16} className="text-danger"/> Top Risk Factors
+                      </h3>
+                      <div className="space-y-3">
+                        {predictionResult.risk_factors.map((factor: any, i: number) => (
+                          <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-brand-background border border-brand-border">
+                            <span className="text-sm font-bold text-brand-text">{factor.factor}</span>
+                            <span className="text-xs font-bold text-danger">Impact: {factor.impact}%</span>
                           </div>
-                          
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {predictionResult.protective_factors && predictionResult.protective_factors.length > 0 && (
+                  <Card className="border-brand-border bg-brand-card shadow-lg">
+                    <CardContent className="p-5">
+                      <h3 className="text-sm font-black text-brand-text uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <ShieldAlert size={16} className="text-success"/> Protective Factors
+                      </h3>
+                      <div className="space-y-3">
+                        {predictionResult.protective_factors.map((factor: any, i: number) => (
+                          <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-brand-background border border-brand-border">
+                            <span className="text-sm font-bold text-brand-text">{factor.factor}</span>
+                            <span className="text-xs font-bold text-success">Impact: {factor.impact}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Recommendations */}
+                <Card className="border-brand-border bg-brand-card shadow-lg">
+                  <CardContent className="p-5">
+                    <h3 className="text-sm font-black text-brand-text uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Sparkles size={16} className="text-primary"/> Recommended Actions
+                    </h3>
+                    <div className="space-y-3">
+                      {predictionResult.recommended_actions.map((act: any, i: number) => (
+                        <div key={i} className="p-3 rounded-lg bg-brand-background border border-brand-border flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <Badge variant={item.prediction === 'Delivery Failure' ? 'danger' : 'success'}>
-                              {item.prediction === 'Delivery Failure' ? 'Failure' : 'Success'}
-                            </Badge>
-                            <span className="font-semibold text-slate-500">
-                              {Math.round(item.confidence <= 1 ? item.confidence * 100 : item.confidence)}%
-                            </span>
+                            <div className="p-1.5 rounded bg-primary/10 text-primary">
+                              <Activity size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-brand-text">{act.action}</p>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase">Priority: {act.priority}</p>
+                            </div>
                           </div>
+                          <Badge variant="outline" className="border-primary/30 text-primary">+{act.expected_improvement}% Success</Badge>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
 
+                {/* Estimated Outcomes */}
+                <Card className="border-brand-border bg-brand-card shadow-lg">
+                  <CardContent className="p-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Est. Success</p>
+                        <p className="text-2xl font-black text-success">{predictionResult.estimated_success_after_action}%</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Time Saved</p>
+                        <p className="text-2xl font-black text-brand-text">{predictionResult.estimated_time_saved_minutes}m</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Cost Saved</p>
+                        <p className="text-2xl font-black text-brand-text">₹{predictionResult.estimated_cost_saved_rupees}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Fuel Saved</p>
+                        <p className="text-2xl font-black text-brand-text">{predictionResult.estimated_fuel_saved_liters}L</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-brand-border flex justify-between items-center text-[10px] font-bold text-slate-400">
+                      <span>Model: {predictionResult.model}</span>
+                      <span>Timestamp: {new Date(predictionResult.timestamp).toLocaleString()}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-
       </div>
     </div>
   );

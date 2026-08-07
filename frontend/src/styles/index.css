@@ -176,3 +176,7 @@
   border: 1px solid var(--brand-border) !important;
   border-radius: 12px !important;
 }
+
+.leaflet-marker-icon {
+  transition: transform 2s linear;
+}

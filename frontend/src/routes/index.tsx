@@ -28,6 +28,8 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const PredictionPage = lazy(() => import('@/pages/PredictionPage'));
 const DeliveriesPage = lazy(() => import('@/pages/DeliveriesPage'));
 const DigitalTwinPage = lazy(() => import('@/pages/DigitalTwinPage'));
+const AgentTracePage = lazy(() => import('@/pages/AgentTracePage'));
+const DriverConsolePage = lazy(() => import('@/pages/DriverConsolePage'));
 const HealthPage = lazy(() => import('@/pages/HealthPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
@@ -114,6 +116,22 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<Loading variant="shimmer" text="Loading replication matrix..." />}>
             <DigitalTwinPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/agent-trace',
+        element: (
+          <Suspense fallback={<Loading variant="shimmer" text="Loading AI Timeline..." />}>
+            <AgentTracePage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/driver',
+        element: (
+          <Suspense fallback={<Loading variant="shimmer" text="Loading Driver Console..." />}>
+            <DriverConsolePage />
           </Suspense>
         ),
       },

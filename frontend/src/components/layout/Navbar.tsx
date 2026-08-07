@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Bell, Menu, User, Settings, LogOut, Sun, Moon, ChevronRight } from 'lucide-react';
+import { Bell, Menu, User, Settings, LogOut, Sun, Moon, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLocation } from 'react-router-dom';
+import { useDemoContext } from '@/contexts/DemoContext';
+import { Play } from 'lucide-react';
 
 interface NavbarProps {
   sidebarOpen: boolean;
@@ -15,6 +17,7 @@ export const Navbar = ({ sidebarOpen, setSidebarOpen }: NavbarProps) => {
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const { theme, setTheme } = useTheme();
   const location = useLocation();
+  const { isDemoMode, setIsDemoMode } = useDemoContext();
 
   const notifications = [
     { id: 1, title: 'Delivery #4928 delayed', time: '10m ago', type: 'warning' },
@@ -51,23 +54,23 @@ export const Navbar = ({ sidebarOpen, setSidebarOpen }: NavbarProps) => {
         </div>
       </div>
 
-      {/* Center: Global Search Bar */}
-      <div className="absolute left-1/2 -translate-x-1/2 hidden lg:block w-[400px]">
-        <div className="relative w-full">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            placeholder="Quick search... (Press ⌘K)"
-            className="h-10 w-full rounded-xl border border-brand-border bg-brand-background pl-10 pr-10 text-sm text-brand-text outline-none transition-all duration-200 placeholder:text-muted focus:border-primary focus:bg-brand-card focus:ring-2 focus:ring-primary/20"
-          />
-          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none rounded border border-brand-border bg-brand-card px-1.5 py-0.5 text-[10px] font-semibold text-muted shadow-sm">
-            ⌘K
-          </div>
-        </div>
-      </div>
+
 
       {/* Right side: Theme, Notifications, Profile */}
       <div className="flex items-center gap-4">
+        {/* Demo Toggle */}
+        <button
+          onClick={() => setIsDemoMode(!isDemoMode)}
+          className={`relative flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${
+            isDemoMode 
+              ? 'border-primary bg-primary/10 text-primary' 
+              : 'border-brand-border text-muted hover:bg-brand-background'
+          }`}
+          title="Toggle Demo Mode"
+        >
+          <Play size={18} fill={isDemoMode ? 'currentColor' : 'none'} />
+        </button>
+
         {/* Theme Toggle */}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}

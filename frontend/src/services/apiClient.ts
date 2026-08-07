@@ -4,7 +4,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
  * Configure Axios base instance for Venlix AI Backend.
  */
 export const apiClient = axios.create({
-  baseURL: (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_URL as string,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -50,5 +50,18 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const DashboardAPI = {
+  getStats: () => apiClient.get('/dashboard').then(res => res.data),
+  getAnalytics: () => apiClient.get('/analytics').then(res => res.data),
+  getDeliveries: () => apiClient.get('/deliveries').then(res => res.data),
+  getLiveDeliveries: () => apiClient.get('/live-deliveries').then(res => res.data),
+  getSocieties: () => apiClient.get('/societies').then(res => res.data),
+  getDrivers: () => apiClient.get('/drivers').then(res => res.data),
+  resetDemo: () => apiClient.post('/reset').then(res => res.data),
+  startSimulation: () => apiClient.post('/simulation/start').then(res => res.data),
+  pauseSimulation: () => apiClient.post('/simulation/pause').then(res => res.data),
+  resetSimulation: () => apiClient.post('/simulation/reset').then(res => res.data)
+};
 
 export default apiClient;

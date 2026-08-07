@@ -47,6 +47,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setProfile(null);
             }
             setProfileLoaded(true);
+          })
+          .catch((err) => {
+            console.error('Supabase fetch error:', err);
+            setProfile(null);
+            setProfileLoaded(true);
           });
       } else {
         setProfile(null);
@@ -60,7 +65,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
   };
 
-  const isFullyLoaded = clerkLoaded && profileLoaded;
+  const [safetyLoaded, setSafetyLoaded] = useState(false);
+
+  useEffect(() => {
+    // Fallback to ensure we never get stuck indefinitely on the loading screen
+    const timer = setTimeout(() => {
+      setProfileLoaded(true);
+      setSafetyLoaded(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isFullyLoaded = (clerkLoaded && profileLoaded) || safetyLoaded;
 
   return (
     <AuthContext.Provider value={{ 

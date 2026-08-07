@@ -12,6 +12,9 @@ import {
   Sun,
   PanelLeftClose,
   PanelLeftOpen,
+  History,
+  Smartphone,
+  User,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -40,6 +43,8 @@ export const Sidebar = ({ isOpen, setIsOpen }: SidebarProps) => {
         { name: 'Prediction', path: '/prediction', icon: BrainCircuit },
         { name: 'Deliveries', path: '/deliveries', icon: Truck },
         { name: 'Digital Twin', path: '/digital-twin', icon: Workflow },
+        { name: 'Agent Trace', path: '/agent-trace', icon: History },
+        { name: 'Driver Console', path: '/driver', icon: Smartphone },
         { name: 'Health', path: '/health', icon: Activity },
       ],
     },

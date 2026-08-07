@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { DemoControls } from '@/components/demo/DemoControls';
 import { cn } from '@/utils/cn';
 
 
@@ -83,6 +84,9 @@ export const MainLayout = () => {
           </AnimatePresence>
         </main>
       </div>
+      
+      {/* Demo Controls overlay */}
+      <DemoControls />
     </div>
   );
 };

@@ -4,14 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Hexagon, KeyRound, User as UserIcon } from 'lucide-react';
 import { useSignUp } from '@clerk/clerk-react';
 import { supabase } from '@/lib/supabase';
-import emailjs from '@emailjs/browser';
+
 
 export const SignUpPage = () => {
   const navigate = useNavigate();
   
   const { isLoaded, signUp, setActive } = useSignUp();
   
-  const [step, setStep] = useState<'form' | 'admin_approval' | 'clerk_verification'>('form');
+  const [step, setStep] = useState<'form' | 'clerk_verification'>('form');
   
   // Shared fields
   const [name, setName] = useState('');
@@ -23,9 +23,7 @@ export const SignUpPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Admin OTP
-  const [generatedAdminOtp, setGeneratedAdminOtp] = useState('');
-  const [adminOtp, setAdminOtp] = useState('');
+
   
   // Clerk Verification Code
   const [verificationCode, setVerificationCode] = useState('');
@@ -44,46 +42,11 @@ export const SignUpPage = () => {
     setError('');
     
     try {
-      // Send EmailJS OTP for Admin Approval
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-      const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || import.meta.env.VITE_EMAILJS_Template_ID;
-      const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-      
-      if (!serviceId || !templateId || !publicKey) {
-        throw new Error("EmailJS configuration is missing.");
-      }
-
-      await emailjs.send(
-        serviceId,
-        templateId,
-        {
-          to_email: 'saividwan.06@gmail.com', // or email if we send to the user
-          otp_code: code,
-          otp: code,
-          reply_to: email
-        },
-        publicKey
-      );
-
-      setGeneratedAdminOtp(code);
-      setStep('admin_approval');
-      setIsLoading(false);
+      await createClerkAccount();
     } catch (err: any) {
       setError(err.message || 'An error occurred during sign up.');
       setIsLoading(false);
     }
-  };
-
-  const verifyAdminOtpAndCreateAccount = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminOtp !== generatedAdminOtp) {
-      setError('Invalid Admin Approval Code.');
-      return;
-    }
-    setIsLoading(true);
-    setError('');
-    await createClerkAccount();
   };
 
   const createClerkAccount = async () => {
@@ -243,40 +206,7 @@ export const SignUpPage = () => {
               </motion.form>
             )}
 
-            {step === 'admin_approval' && (
-              <motion.form 
-                key="admin_approval"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                onSubmit={verifyAdminOtpAndCreateAccount} 
-                className="space-y-6"
-              >
-                <div className="text-center mb-4">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Admin Approval OTP has been sent for verification.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center block">Approval Code</label>
-                  <div className="relative group">
-                    <KeyRound size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
-                    <input type="text" value={adminOtp} onChange={(e) => setAdminOtp(e.target.value.replace(/\D/g, ''))} maxLength={6} className="w-full h-12 bg-slate-50 dark:bg-[#0B0F19]/50 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-center text-lg tracking-widest font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all" placeholder="••••••" />
-                  </div>
-                </div>
-                <button 
-                  type="submit"
-                  disabled={adminOtp.length !== 6 || isLoading}
-                  className={`w-full h-12 rounded-xl flex items-center justify-center text-sm font-bold transition-all shadow-lg ${
-                    adminOtp.length === 6 && !isLoading
-                      ? 'bg-gradient-to-r from-primary to-purple-600 text-white hover:shadow-primary/25 hover:opacity-90' 
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
-                  }`}
-                >
-                  {isLoading ? 'Verifying...' : 'Verify & Continue'}
-                </button>
-              </motion.form>
-            )}
+
 
             {step === 'clerk_verification' && (
               <motion.form 

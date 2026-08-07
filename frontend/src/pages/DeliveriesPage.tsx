@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   Filter,
@@ -40,12 +41,14 @@ const MiniProgress = ({ value, isFailed }: { value: number, isFailed: boolean })
 };
 
 export const DeliveriesPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters State
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [filterPrediction, setFilterPrediction] = useState('All');
   const [sortBy, setSortBy] = useState('Latest');
 
@@ -75,9 +78,18 @@ export const DeliveriesPage = () => {
     fetchDeliveries();
   }, [fetchDeliveries]);
 
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q !== null && q !== searchTerm) {
+      setSearchTerm(q);
+      setCurrentPage(1);
+    }
+  }, [searchParams]);
+
   // Reset Filters & Pagination
   const resetFilters = () => {
     setSearchTerm('');
+    setSearchParams({});
     setFilterPrediction('All');
     setSortBy('Latest');
     setCurrentPage(1);
@@ -106,7 +118,12 @@ export const DeliveriesPage = () => {
 
     // Search by ID
     if (searchTerm.trim()) {
-      result = result.filter(d => d.id.toString().includes(searchTerm.trim()));
+      const term = searchTerm.trim().toLowerCase();
+      result = result.filter(d => {
+        const dateStr = new Date(d.created_at).toISOString().slice(0, 10).replace(/-/g, '');
+        const orderId = `ven-${dateStr}-${String(d.id).padStart(4, '0')}`;
+        return orderId.includes(term) || d.id.toString().includes(term);
+      });
     }
 
     // Filter Prediction
@@ -144,6 +161,13 @@ export const DeliveriesPage = () => {
       setCurrentPage(1);
     }
   }, [totalPages, currentPage]);
+
+  // Auto-expand if there's exactly 1 search result
+  useEffect(() => {
+    if (searchTerm.trim() && filteredAndSorted.length === 1 && !isLoading) {
+      setExpandedRowId(filteredAndSorted[0].id);
+    }
+  }, [filteredAndSorted.length, searchTerm, isLoading]);
 
   if (error && !isLoading) {
     return (
@@ -194,7 +218,11 @@ export const DeliveriesPage = () => {
                   type="text"
                   placeholder="Search Delivery ID..."
                   value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                  onChange={(e) => { 
+                    setSearchTerm(e.target.value); 
+                    setSearchParams(e.target.value ? { search: e.target.value } : {});
+                    setCurrentPage(1); 
+                  }}
                   className="h-9 w-40 sm:w-56 rounded-xl border border-brand-border pl-9 pr-3 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all bg-brand-card text-brand-text"
                 />
               </div>
@@ -273,13 +301,16 @@ export const DeliveriesPage = () => {
                     const confVal = row.confidence <= 1 ? row.confidence * 100 : row.confidence;
                     const isExpanded = expandedRowId === row.id;
 
+                    const dateStr = new Date(row.created_at).toISOString().slice(0, 10).replace(/-/g, '');
+                    const orderId = `VEN-${dateStr}-${String(row.id).padStart(4, '0')}`;
+
                     return (
                       <React.Fragment key={row.id}>
                         <TableRow className={`hover:bg-brand-background/60 transition-colors group cursor-pointer ${isExpanded ? 'bg-brand-background/40' : ''}`} onClick={() => setExpandedRowId(isExpanded ? null : row.id)}>
                           
                           <TableCell className="font-bold text-brand-text text-xs py-3">
                             <div className="flex flex-col">
-                              <span>#{row.id}</span>
+                              <span>{orderId}</span>
                               <span className="text-[10px] text-slate-400 font-normal mt-0.5">
                                 {new Date(row.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                               </span>

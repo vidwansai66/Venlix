@@ -1,320 +1,261 @@
-import { useState, lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  Activity,
-  CheckCircle2,
+  Package,
   AlertTriangle,
+  CheckCircle2,
   TrendingUp,
   Brain,
-  Server,
-  Database,
-  Cpu,
+  Timer,
+  Fuel,
+  IndianRupee,
   RefreshCw,
-  Clock
+  Clock,
+  ChevronRight,
+  Database
 } from 'lucide-react';
-import { useDashboardData } from '@/hooks/useDashboardData';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Loading } from '@/components/ui/Loading';
-import { Error as ErrorState } from '@/components/ui/Error';
+import { DashboardAPI } from '@/services/apiClient';
+import { useLiveDeliveries } from '@/hooks/useLiveDeliveries';
+import { generateSimulatedOrder } from '@/utils/orderSimulator';
+import apiClient from '@/services/apiClient';
 
-// Lazy load the Recharts charts for optimal load times
-const DashboardCharts = lazy(() => import('@/components/dashboard/DashboardCharts'));
+// Lazy load the charts for optimal load times
+const MissionControlCharts = lazy(() => import('@/components/dashboard/MissionControlCharts'));
 
 export const DashboardPage = () => {
-  const { report, deliveries, health, isLoading, error, refetch } = useDashboardData();
-  const [activeChartTab, setActiveChartTab] = useState<'confidence' | 'pie' | 'bar'>('confidence');
+  const { stats, deliveries, analytics, refresh } = useLiveDeliveries();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
 
-  // If there's an error and we are not in loading state, show the beautiful Error component
-  if (error && !isLoading) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <ErrorState
-          title="Telemetry Synchronization Failed"
-          message={error}
-          onRetry={refetch}
-        />
-      </div>
-    );
-  }
+  const handleReset = async () => {
+    setIsRefreshing(true);
+    try {
+      await DashboardAPI.resetDemo();
+      toast.success('Database reset successfully!');
+      await refresh();
+    } catch (err) {
+      toast.error('Failed to reset database.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
-  // Extract statistics values (with fallbacks for skeletons/empty states)
-  const totalPredictions = report?.total_predictions ?? 0;
-  const deliverySuccess = report?.delivery_success ?? 0;
-  const deliveryFailures = report?.delivery_failures ?? 0;
-  const failureRate = report?.failure_rate ?? '0%';
-  
-  // Format average confidence for display
-  const rawConfidence = report?.average_confidence ?? 0;
-  const displayConfidence = rawConfidence > 0 
-    ? `${(rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence).toFixed(1)}%` 
-    : '0%';
+  const runSimulation = async () => {
+    if (isSimulating) return;
+    
+    setIsSimulating(true);
+
+    toast.info("🚀 Starting Live Order Simulation...", { duration: 3000 });
+
+    try {
+      for (let i = 0; i < 10; i++) {
+        // Check if component unmounted or simulation stopped (basic check)
+        if (!isSimulating && i > 0) {
+           // We can't strictly stop it easily without a ref, but let's assume it runs to completion for now
+        }
+
+        const payload = generateSimulatedOrder();
+        
+        // Random delay between 300ms - 700ms
+        const delay = Math.floor(Math.random() * (700 - 300 + 1)) + 300;
+        await new Promise(r => setTimeout(r, delay));
+        
+        // Toast notifications to simulate stages
+        const toastId = toast.loading(`Order ${i+1}/10: Incoming Delivery...`);
+        
+        try {
+          await apiClient.post('/predict', payload);
+          toast.success(`Order ${i+1}: Risk Evaluated & Saved Successfully`, { id: toastId, duration: 1500 });
+          await refresh(); // Live update the dashboard
+        } catch (err) {
+          toast.error(`Order ${i+1}: Failed to predict`, { id: toastId, duration: 2000 });
+        }
+      }
+      toast.success("🏁 Simulation Complete! 10 orders generated.", { duration: 4000 });
+    } finally {
+      setIsSimulating(false);
+    }
+  };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in pb-10 rounded-2xl transition-all duration-700">
       
       {/* Top Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-brand-text tracking-tight">
-            Logistics Overview
+            Mission Control
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Real-time fleet operations, route predictions, and system health status.
+            Predicting and Preventing Delivery Failures Before They Happen
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={refetch} 
-            isLoading={isLoading}
-            leftIcon={<RefreshCw size={14} />}
-          >
-            Sync Data
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button variant="primary" size="sm" onClick={runSimulation} disabled={isSimulating} isLoading={isSimulating}>
+            🚀 Generate Demo Orders
           </Button>
-          <Button variant="primary" size="sm" leftIcon={<Brain size={14} />} onClick={() => {
-            toast.info('Model Settings feature coming soon');
-          }}>
-            Model Settings
+          <Button variant="outline" size="sm" leftIcon={<Database size={14} />} onClick={handleReset} disabled={isSimulating} isLoading={isRefreshing && !isSimulating}>
+            🗑 Reset Demo
+          </Button>
+          <Button variant="outline" size="sm" leftIcon={<RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />} onClick={refresh} disabled={isSimulating}>
+            Sync Realtime
           </Button>
         </div>
       </div>
 
-      {/* Stats Cards Row (5 Columns) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+      {/* TOP KPI SECTION */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         <StatCard
-          title="Total Predictions"
-          value={isLoading ? '...' : totalPredictions.toLocaleString()}
-          description="Inference operations count"
-          icon={Activity}
-          isLoading={isLoading}
+          title="Today's Deliveries"
+          value={stats.todays_deliveries.toString()}
+          icon={Package}
           variant="primary"
         />
         <StatCard
-          title="Successful Deliveries"
-          value={isLoading ? '...' : deliverySuccess.toLocaleString()}
-          description="On-time ETAs matched"
-          icon={CheckCircle2}
-          isLoading={isLoading}
-          variant="success"
-        />
-        <StatCard
-          title="Predicted Failures"
-          value={isLoading ? '...' : deliveryFailures.toLocaleString()}
-          description="Potential bottlenecks detected"
+          title="High Risk Deliveries"
+          value={stats.high_risk_deliveries.toString()}
+          description="Risk > 50%"
           icon={AlertTriangle}
-          isLoading={isLoading}
           variant="danger"
         />
         <StatCard
-          title="AI Failure Rate"
-          value={isLoading ? '...' : failureRate}
-          description="Systemic delay ratio"
+          title="AI Prevented Failures"
+          value={stats.ai_prevented_failures.toString()}
+          description="Autonomously Resolved"
+          icon={Brain}
+          variant="success"
+        />
+        <StatCard
+          title="Success Rate"
+          value={`${stats.success_rate}%`}
+          description="Predicted Success After Action"
+          icon={CheckCircle2}
+          variant="success"
+        />
+        <StatCard
+          title="Average Risk Score"
+          value={`${stats.average_risk_score}%`}
+          description="Across All Deliveries"
           icon={TrendingUp}
-          isLoading={isLoading}
           variant="warning"
         />
         <StatCard
-          title="Avg. Prediction Confidence"
-          value={isLoading ? '...' : displayConfidence}
-          description="Statistical confidence gap"
-          icon={Brain}
-          isLoading={isLoading}
-          variant="default"
+          title="Estimated Cost Saved"
+          value={`₹${stats.cost_saved}`}
+          icon={IndianRupee}
+          variant="success"
+        />
+        <StatCard
+          title="Fuel Saved"
+          value={`${stats.fuel_saved} L`}
+          icon={Fuel}
+          variant="primary"
+        />
+        <StatCard
+          title="Driver Hours Saved"
+          value={`${stats.time_saved_hours} h`}
+          icon={Timer}
+          variant="primary"
         />
       </div>
 
-      {/* Grid Layout Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
-        {/* Core Logistics Chart Slot (lg:col-span-2) */}
-        <Card className="lg:col-span-2 hover:border-slate-200/80 transition-all duration-300">
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-50 pb-4">
-            <div>
-              <CardTitle>Fleet Output Analytics</CardTitle>
-              <CardDescription>Visual stats displaying delivery performance and AI prediction gaps.</CardDescription>
-            </div>
-            
-            {/* Inline Tabs Switcher */}
-            <div className="flex items-center gap-1 bg-brand-background p-1 rounded-xl shrink-0 self-start sm:self-center border border-brand-border">
-              <button
-                onClick={() => setActiveChartTab('confidence')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeChartTab === 'confidence'
-                    ? 'bg-brand-card text-brand-text shadow-sm border border-brand-border'
-                    : 'text-slate-500 hover:text-brand-text'
-                }`}
-              >
-                Confidence Trend
-              </button>
-              <button
-                onClick={() => setActiveChartTab('pie')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeChartTab === 'pie'
-                    ? 'bg-brand-card text-brand-text shadow-sm border border-brand-border'
-                    : 'text-slate-500 hover:text-brand-text'
-                }`}
-              >
-                Success Ratio
-              </button>
-              <button
-                onClick={() => setActiveChartTab('bar')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeChartTab === 'bar'
-                    ? 'bg-brand-card text-brand-text shadow-sm border border-brand-border'
-                    : 'text-slate-500 hover:text-brand-text'
-                }`}
-              >
-                Volume Summary
-              </button>
-            </div>
-          </CardHeader>
+        {/* LEFT COLUMN - Main Content (Spans 2 columns on xl) */}
+        <div className="xl:col-span-3 space-y-6">
           
-          <CardContent className="pt-6">
-            {isLoading ? (
-              <div className="h-64 flex items-center justify-center">
-                <Loading variant="spinner" text="Compiling telemetry plots..." />
-              </div>
-            ) : (
-              <Suspense fallback={
-                <div className="h-64 flex items-center justify-center">
-                  <Loading variant="spinner" text="Plotting graphics..." />
-                </div>
-              }>
-                <DashboardCharts
-                  report={report}
-                  deliveries={deliveries}
-                  activeTab={activeChartTab}
-                />
-              </Suspense>
-            )}
-          </CardContent>
-        </Card>
+          {/* CHARTS */}
+          <Suspense fallback={
+            <div className="h-64 flex items-center justify-center bg-brand-card/30 rounded-2xl border border-brand-border">
+              <Loading variant="spinner" text="Loading analytics..." />
+            </div>
+          }>
+            <MissionControlCharts analytics={analytics} />
+          </Suspense>
 
-        {/* Right Column Layout (Health Widget & Short Activity Feed/Telemetry Status) */}
-        <div className="flex flex-col gap-6 lg:col-span-1">
-          
-          {/* Health Diagnostics Widget */}
-          <Card className="hover:border-slate-200/80 transition-all duration-300">
-            <CardHeader className="border-b border-slate-50 pb-4">
+          {/* RECENT DELIVERIES HERO Table */}
+          <Card className="hover:border-slate-200/80 transition-all duration-300 overflow-hidden shadow-premium">
+            <CardHeader className="border-b border-slate-50/10 dark:border-white/5 pb-4 bg-gradient-to-r from-brand-card to-brand-background">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold">System Status</CardTitle>
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${
-                      health?.status === 'Healthy' ? 'bg-success' : 'bg-danger'
-                    }`}></span>
-                    <span className={`relative inline-flex h-2 w-2 rounded-full ${
-                      health?.status === 'Healthy' ? 'bg-success' : 'bg-danger'
-                    }`}></span>
-                  </span>
-                  <Badge variant={health?.status === 'Healthy' ? 'success' : 'danger'}>
-                    {isLoading ? 'Loading' : health?.status || 'Offline'}
-                  </Badge>
+                <div>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Clock className="text-primary" size={22} />
+                    Recent AI Deliveries
+                  </CardTitle>
+                  <CardDescription>Latest prediction evaluations</CardDescription>
                 </div>
               </div>
-              <CardDescription>Real-time microservice backend connections.</CardDescription>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3">
-              {isLoading ? (
-                <div className="space-y-2.5 animate-pulse">
-                  <div className="h-8 bg-slate-100 rounded-lg w-full" />
-                  <div className="h-8 bg-slate-100 rounded-lg w-full" />
-                  <div className="h-8 bg-slate-100 rounded-lg w-full" />
-                </div>
-              ) : (
-                <>
-                  {/* Database Health Row */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-brand-border bg-brand-background text-xs">
-                    <div className="flex items-center gap-2 text-brand-text font-semibold">
-                      <Database size={14} className="text-slate-400" />
-                      SQLite Database
-                    </div>
-                    <span className="font-bold text-emerald-500">{health?.database || 'Disconnected'}</span>
-                  </div>
-
-                  {/* ML Model Health Row */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-brand-border bg-brand-background text-xs">
-                    <div className="flex items-center gap-2 text-brand-text font-semibold">
-                      <Cpu size={14} className="text-slate-400" />
-                      Inference Engine
-                    </div>
-                    <span className="font-bold text-emerald-500">{health?.model || 'Unloaded'}</span>
-                  </div>
-
-                  {/* Version Telemetry Row */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-brand-border bg-brand-background text-xs">
-                    <div className="flex items-center gap-2 text-brand-text font-semibold">
-                      <Server size={14} className="text-slate-400" />
-                      Gateway Version
-                    </div>
-                    <span className="font-bold text-slate-500">v{health?.version || '0.0.0'}</span>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Recent Deliveries List */}
-          <Card className="hover:border-slate-200/80 transition-all duration-300 flex-1 flex flex-col">
-            <CardHeader className="border-b border-slate-50 pb-4">
-              <CardTitle className="text-base font-bold">Recent Prediction Actions</CardTitle>
-              <CardDescription>Live telemetry logging of recent dispatches.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-auto">
-              {isLoading ? (
-                <div className="p-4 space-y-3 animate-pulse">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-10 bg-slate-100 rounded-lg w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="w-full min-h-[220px]">
-                  {deliveries.length === 0 ? (
-                    <div className="h-full min-h-[220px] flex flex-col items-center justify-center text-slate-400 p-4">
-                      <Clock size={24} className="mb-2 text-slate-350" />
-                      <p className="text-xs font-bold uppercase tracking-wider">No Shipments Processed</p>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs font-semibold py-2">ID</TableHead>
-                          <TableHead className="text-xs font-semibold py-2">Prediction</TableHead>
-                          <TableHead className="text-xs font-semibold py-2">Conf</TableHead>
-                          <TableHead className="text-xs font-semibold py-2">Risk</TableHead>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                {deliveries.length === 0 ? (
+                  <div className="p-10 text-center text-slate-500 font-medium">No deliveries found. Make a prediction!</div>
+                ) : (
+                  <Table>
+                    <TableHeader className="bg-brand-background/50">
+                      <TableRow>
+                        <TableHead className="text-xs font-bold py-3 whitespace-nowrap">Time</TableHead>
+                        <TableHead className="text-xs font-bold py-3 whitespace-nowrap">Risk / Conf</TableHead>
+                        <TableHead className="text-xs font-bold py-3 whitespace-nowrap">Weather & Traffic</TableHead>
+                        <TableHead className="text-xs font-bold py-3 whitespace-nowrap">Driver Status</TableHead>
+                        <TableHead className="text-xs font-bold py-3 whitespace-nowrap">Risk Level</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {deliveries.map((delivery, idx) => {
+                        const dateStr = new Date(delivery.created_at).toISOString().slice(0, 10).replace(/-/g, '');
+                        const orderId = `VEN-${dateStr}-${String(delivery.id).padStart(4, '0')}`;
+                        
+                        return (
+                        <TableRow key={idx} className="hover:bg-brand-background transition-colors">
+                          <TableCell className="font-bold text-brand-text whitespace-nowrap py-3">
+                            <div className="flex flex-col">
+                              <span className="text-xs text-brand-text">{orderId}</span>
+                              <span className="text-[10px] text-slate-500">{new Date(delivery.created_at).toLocaleTimeString()}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex flex-col gap-1.5 w-24">
+                              <div className="flex items-center justify-between text-xs font-bold">
+                                <span className={delivery.risk_score > 74 ? 'text-danger' : delivery.risk_score > 49 ? 'text-warning' : 'text-success'}>
+                                  {delivery.risk_score}% Risk
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                <div className={`h-1.5 rounded-full ${delivery.risk_score > 74 ? 'bg-danger' : delivery.risk_score > 49 ? 'bg-warning' : 'bg-success'}`} style={{ width: `${delivery.risk_score}%` }}></div>
+                              </div>
+                              <span className="text-[10px] text-muted font-medium">{delivery.confidence}% Conf</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-semibold text-brand-text">{delivery.weather}</span>
+                              <span className="text-xs text-muted font-medium">{delivery.traffic} Traffic</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <span className="text-sm font-semibold text-brand-text bg-brand-background px-2.5 py-1 rounded-md border border-brand-border">
+                              {delivery.driver_status}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Badge variant={delivery.risk_level === 'Critical' ? 'danger' : delivery.risk_level === 'High' ? 'danger' : delivery.risk_level === 'Medium' ? 'warning' : 'success'} pill className="text-xs">
+                              {delivery.risk_level}
+                            </Badge>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {deliveries.slice(0, 5).map((d) => (
-                          <TableRow key={d.id} className="hover:bg-brand-background">
-                            <TableCell className="font-bold text-brand-text py-2.5 text-xs">
-                              #{d.id}
-                            </TableCell>
-                            <TableCell className="py-2.5 text-xs">
-                              <Badge variant={d.prediction === 'Delivery Failure' ? 'danger' : 'success'}>
-                                {d.prediction === 'Delivery Failure' ? 'Failure' : 'Success'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs font-semibold text-slate-500 py-2.5">
-                              {Math.round((d.confidence <= 1 ? d.confidence * 100 : d.confidence))}%
-                            </TableCell>
-                            <TableCell className="py-2.5 text-xs">
-                              <Badge variant={d.risk_score > 0.6 ? 'danger' : d.risk_score > 0.35 ? 'warning' : 'success'} pill>
-                                {d.risk_score.toFixed(2)}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              )}
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
             </CardContent>
           </Card>
 
