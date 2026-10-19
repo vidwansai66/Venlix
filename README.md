@@ -1,303 +1,142 @@
-# 🚚 Venlix AI – Smart Delivery Failure Prediction System
+# Venlix AI — Delivery Risk Intelligence for Gated Communities
 
-## 📌 Project Overview
+Venlix is a full-stack prototype for surfacing delivery-failure risk in gated-community operations. It combines an XGBoost-backed prediction service with a FastAPI backend and a React/TypeScript dashboard.
 
-Venlix AI is an AI-powered logistics platform that predicts delivery failures before they occur. It uses Machine Learning to analyze delivery-related factors such as traffic, weather, driver performance, delivery distance, and customer history to determine whether a delivery is likely to succeed or fail.
+The current public code focuses on delivery-risk prediction, case records, explanations, operational dashboards, and privacy-aware handling of customer fields.
 
-The backend is developed using **FastAPI**, while the Machine Learning model is built using **XGBoost**. The system exposes REST APIs that can be consumed by any frontend application.
+## Key capabilities
 
----
+- **Delivery risk prediction** using a serialized XGBoost model and shared feature/label-encoding assets.
+- **Risk explanations and recommended actions** returned alongside prediction results.
+- **Delivery-case workflow** for creating and retrieving cases.
+- **Dashboard and reporting APIs** for delivery summaries, analytics, drivers, societies, and live-delivery views.
+- **Simulation endpoints** for creating and resetting demo delivery activity.
+- **Privacy controls** that mask customer fields by default, record access events, and support predictive-contact consent and retention expiry.
+- **React dashboard** built with TypeScript and Vite.
 
-# 🚀 Features
+> **Prototype boundary:** the public backend demonstrates prediction and simulated delivery operations. A verified, end-to-end live phone-call or SMS provider integration is not evident in the current API code. Treat calling and messaging as simulated or planned until an actual integration is configured and tested.
 
-- 🤖 Delivery Failure Prediction using Machine Learning
-- 📊 Dashboard Reports API
-- 🚚 Delivery History API
-- 🌍 Digital Twin API for Map Visualization
-- 💾 SQLite Database Integration
-- ⚡ FastAPI REST Backend
-- 🧠 XGBoost Prediction Model
-- 📈 Model Evaluation & Feature Importance
-- 🛠 Modular Backend Architecture
+## Architecture
 
----
+```mermaid
+flowchart LR
+    A[React + TypeScript UI] -->|REST / JSON| B[FastAPI]
+    B --> C[XGBoost prediction service]
+    C --> D[Risk score + explanation + suggested actions]
+    B --> E[SQLAlchemy persistence]
+    E --> F[Delivery cases and agent logs]
+    B --> G[Dashboard and report endpoints]
+```
 
-# 🏗 Tech Stack
+## Technology stack
 
-### Machine Learning
-- Python
-- Pandas
-- NumPy
-- Scikit-learn
-- XGBoost
-- Joblib
+- **Frontend:** React, TypeScript, Vite, React Router, Recharts, Axios
+- **Backend:** Python, FastAPI, SQLAlchemy, Pydantic, Uvicorn
+- **Machine learning:** XGBoost, pandas, NumPy, scikit-learn, joblib
+- **Data and model artifacts:** CSV datasets, serialized model, feature columns, label encoders
 
-### Backend
-- FastAPI
-- SQLAlchemy
-- Pydantic
-- SQLite
-- Uvicorn
-
-### Development
-- Jupyter Notebook
-- VS Code
-- Git
-- GitHub
-
----
-
-# 📂 Project Structure
+## Repository layout
 
 ```text
 Venlix/
-│
-├── data/
-│
-├── notebooks/
-│   ├── 01_Data_Preparation.ipynb
-│   ├── 02_EDA.ipynb
-│   ├── 03_Data_Preprocessing.ipynb
-│   ├── 04_Model_Training.ipynb
-│   └── 05_Model_Evaluation.ipynb
-│
 ├── backend/
 │   ├── app.py
 │   ├── config.py
-│   ├── crud.py
 │   ├── database.py
+│   ├── crud.py
 │   ├── models.py
 │   ├── schemas.py
-│   ├── requirements.txt
-│   ├── venlix.db
-│   │
 │   ├── routers/
-│   │   ├── prediction.py
-│   │   ├── deliveries.py
-│   │   ├── reports.py
-│   │   └── twin.py
-│   │
-│   ├── services/
-│   │   └── prediction_service.py
-│   │
-│   └── models/
-│       ├── venlix_model.pkl
-│       ├── feature_columns.pkl
-│       └── label_encoders.pkl
-│
-└── README.md
+│   └── services/
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── .env.example
+├── data/
+│   └── datasets and evaluation artifacts
+├── models/
+│   ├── venlix_model.pkl
+│   ├── feature_columns.pkl
+│   ├── label_encoders.pkl
+│   └── model_metadata.json
+└── notebooks/
 ```
 
----
+## Run locally
 
-# ⚙ Installation
+### 1. Backend
 
-Clone the repository
+From the repository root:
 
 ```bash
-git clone https://github.com/yourusername/Venlix.git
+cd backend
+python -m venv .venv
 ```
 
-Go to backend
+Activate the environment, then install dependencies:
 
 ```bash
-cd Venlix/backend
-```
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
 
-Install dependencies
+# macOS / Linux
+source .venv/bin/activate
 
-```bash
 pip install -r requirements.txt
+uvicorn app:app --reload --port 8000
 ```
 
-Run FastAPI
+Open the FastAPI docs at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+### 2. Frontend
+
+In a second terminal, from the repository root:
 
 ```bash
-uvicorn app:app --reload
+cd frontend
+npm ci
 ```
 
-Open Swagger Documentation
+Copy `.env.example` to `.env` and set `VITE_API_URL=http://localhost:8000`. Configure Clerk, EmailJS, and Supabase values only if you are testing those frontend integrations. Do not put server-side secrets in this file.
 
-```
-http://127.0.0.1:8000/docs
-```
+Start Vite:
 
----
-
-# 📡 API Endpoints
-
-## Home
-
-```
-GET /
+```bash
+npm run dev
 ```
 
-Returns API status.
+## API surface
 
----
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/health` | Backend health check |
+| POST | `/predict` | Generate a delivery-risk prediction |
+| POST | `/delivery_cases` | Create a delivery case |
+| GET | `/delivery_cases/{case_id}` | Retrieve a case |
+| PATCH | `/delivery_cases/{case_id}/privacy` | Update consent/privacy settings |
+| GET | `/delivery_cases/{case_id}/explanation` | Return risk explanation for a case |
+| GET | `/dashboard` | Dashboard summary |
+| GET | `/reports/` | Delivery reporting summary |
+| GET | `/deliveries/` | Delivery history |
+| POST | `/simulation/start` | Start demo simulation |
+| POST | `/simulation/pause` | Pause demo simulation |
+| POST | `/simulation/reset` | Reset demo simulation |
 
-## Health Check
+Use FastAPI Swagger UI for request schemas and the complete route list.
 
-```
-GET /health
-```
+## Model evaluation
 
-Returns backend health information.
+The prediction service loads a serialized model and shared feature/label assets from `models/`. Evaluation files and feature-importance artifacts are stored under `data/`.
 
----
+Before making model-quality claims, report the held-out dataset, class balance, precision, recall, F1, ROC-AUC, and threshold-selection method. This README does not claim a performance figure without a reproducible evaluation result.
 
-## Prediction
+## Security and privacy notes
 
-```
-POST /prediction/
-```
+- Never commit `.env` files or private provider credentials.
+- Any browser-exposed `VITE_*` variable is public to users; never put secret keys in it.
+- Replace hardcoded demo customer records in API responses with synthetic fixtures and avoid returning real customer PII.
+- Verify authorization and retention behavior before describing the system as production-ready.
 
-Predicts delivery success or failure.
+## License
 
-### Sample Request
-
-```json
-{
-  "Agent_Age": 28,
-  "Agent_Rating": 4.8,
-  "Store_Latitude": 12.9716,
-  "Store_Longitude": 77.5946,
-  "Drop_Latitude": 12.9352,
-  "Drop_Longitude": 77.6245,
-  "Weather": 1,
-  "Traffic": 2,
-  "Vehicle": 1,
-  "Area": 1,
-  "Category": 0,
-  "Delivery_Time": 30,
-  "pin_code": 560001,
-  "driver_on_time_rate": 0.92,
-  "customer_unavailability_history": 0.12,
-  "address_failure_history_rate": 0.04,
-  "order_value": 750,
-  "slot_width_minutes": 30,
-  "distance_km": 4.6,
-  "risk_score": 0.35,
-  "day_of_week": 3,
-  "month": 7,
-  "is_weekend": 0,
-  "pickup_delay_minutes": 3,
-  "hour_of_day": 15
-}
-```
-
-### Sample Response
-
-```json
-{
-  "id": 1,
-  "delivery_failed": 0,
-  "prediction": "Delivery Successful",
-  "confidence": 1.0
-}
-```
-
----
-
-## Delivery History
-
-```
-GET /deliveries/
-```
-
-Returns all stored predictions.
-
----
-
-## Reports
-
-```
-GET /reports/
-```
-
-Returns dashboard statistics.
-
-Example:
-
-```json
-{
-  "total_predictions": 10,
-  "delivery_failures": 3,
-  "delivery_success": 7,
-  "failure_rate": "30%",
-  "average_confidence": 0.94
-}
-```
-
----
-
-## Digital Twin
-
-```
-GET /twin/
-```
-
-Returns delivery locations and prediction results for frontend map visualization.
-
----
-
-# 🧠 Machine Learning Workflow
-
-1. Data Preparation
-2. Exploratory Data Analysis (EDA)
-3. Data Preprocessing
-4. Feature Engineering
-5. Model Training
-6. Model Evaluation
-7. Model Serialization
-8. FastAPI Integration
-
----
-
-# 📊 Model Information
-
-Algorithm Used
-
-- XGBoost Classifier
-
-Saved Models
-
-- venlix_model.pkl
-- feature_columns.pkl
-- label_encoders.pkl
-
----
-
-# 🔮 Future Enhancements
-
-- JWT Authentication
-- PostgreSQL Database
-- Docker Deployment
-- CI/CD Pipeline
-- Cloud Deployment
-- Live Tracking
-- Real-time Notifications
-- AI Chat Assistant
-- LangGraph Agent Integration
-
----
-
-# 👥 Team
-
-Backend & Machine Learning
-
-- Your Name
-
-Frontend
-
-- Teammate Name
-
----
-
-# 📄 License
-
-This project is developed for educational and hackathon purposes.
-
----
-
-⭐ If you like this project, consider giving it a star on GitHub!
+No license file is currently documented. Add an explicit license if you intend to accept external reuse or contributions.
